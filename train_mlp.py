@@ -1,4 +1,5 @@
 import numpy as np
+import sys
 
 def xavier_init(n_in, n_out):
     """
@@ -168,3 +169,198 @@ def calculate_accuracy(y_true, y_pred):
     accuracy_score = correct_predictions / total_predictions
     
     return accuracy_score
+
+
+def parse_arguments():
+    """
+    Parse command line arguments for training configuration
+    
+    Returns:
+        dict: Configuration parameters
+    """
+    # Default values
+    config = {
+        'hidden1_size': 22,
+        'hidden2_size': 15,
+        'epochs': 100,
+        'batch_size': 32,
+        'learning_rate': 0.01
+    }
+    
+    # Valid keys
+    valid_keys = ['layer', 'epochs', 'batch_size', 'learning_rate']
+    
+    # Track which keys have been used
+    used_keys = set()
+    
+    args = sys.argv[1:]  # Skip program name
+    i = 0
+    
+    while i < len(args):
+        arg = args[i]
+        
+        # Check if argument is just "--" with nothing after
+        if arg == '--':
+            print(f"Error: Invalid argument '--' without key name")
+            sys.exit(1)
+        
+        # Check if argument starts with --
+        if not arg.startswith('--'):
+            print(f"Error: Invalid argument '{arg}'. All arguments must start with '--'")
+            sys.exit(1)
+        
+        key = arg[2:]  # Remove '--' prefix
+        
+        # Check if key is empty (e.g., just "--")
+        if not key:
+            print(f"Error: Invalid argument '--' without key name")
+            sys.exit(1)
+        
+        # Check if key is valid
+        if key not in valid_keys:
+            print(f"Error: Unknown argument '--{key}'. Valid arguments are: {', '.join(['--' + k for k in valid_keys])}")
+            sys.exit(1)
+        
+        # Check for duplicate keys
+        if key in used_keys:
+            print(f"Error: Argument '--{key}' specified more than once")
+            sys.exit(1)
+        
+        # Mark key as used
+        used_keys.add(key)
+        
+        # Check if next argument exists and is not a flag
+        if i + 1 < len(args) and not args[i + 1].startswith('--'):
+            value = args[i + 1]
+            i += 2  # Move past key and value
+        else:
+            # No value provided, use default
+            print(f"Warning: No value provided for '{arg}', using default")
+            i += 1
+            continue
+        
+        # Process each key
+        if key == 'layer':
+            # Parse hidden layer sizes
+            layer_sizes = []
+            # Collect all numbers until next -- argument or end
+            temp_i = i - 1  # Back to value position
+            while temp_i < len(args) and not args[temp_i].startswith('--'):
+                try:
+                    size = int(args[temp_i])
+                    if size <= 0:
+                        print(f"Error: Layer size must be positive, got {size}")
+                        sys.exit(1)
+                    layer_sizes.append(size)
+                    temp_i += 1
+                except ValueError:
+                    print(f"Error: Layer size must be an integer, got '{args[temp_i]}'")
+                    sys.exit(1)
+            
+            # Update i to skip all parsed layer sizes
+            i = temp_i
+            
+            # Validation: Check number of layer values
+            if len(layer_sizes) == 1:
+                print(f"Error: --layer requires exactly 2 values (hidden layer 1 and hidden layer 2 sizes), got only 1")
+                sys.exit(1)
+            
+            if len(layer_sizes) == 0:
+                print(f"Warning: No valid layer sizes provided, using defaults")
+            else:
+                # Validation: Check minimum size (must be at least 4 neurons)
+                for idx, size in enumerate(layer_sizes[:2]):  # Check only first 2
+                    if size < 4:
+                        print(f"Error: Hidden layer {idx + 1} size must be at least 4, got {size}")
+                        sys.exit(1)
+                
+                # Validation: Second layer must be <= first layer
+                if len(layer_sizes) >= 2:
+                    if layer_sizes[1] > layer_sizes[0]:
+                        print(f"Error: Hidden layer 2 size ({layer_sizes[1]}) must be less than or equal to hidden layer 1 size ({layer_sizes[0]})")
+                        sys.exit(1)
+                
+                if len(layer_sizes) >= 1:
+                    config['hidden1_size'] = layer_sizes[0]
+                if len(layer_sizes) >= 2:
+                    config['hidden2_size'] = layer_sizes[1]
+                if len(layer_sizes) > 2:
+                    print(f"Warning: More than 2 hidden layers specified, using only first 2")
+        
+        elif key == 'epochs':
+            try:
+                epochs = int(value)
+                if epochs <= 0:
+                    print(f"Error: Epochs must be positive, got {epochs}")
+                    sys.exit(1)
+                config['epochs'] = epochs
+            except ValueError:
+                print(f"Error: Epochs must be an integer, got '{value}'")
+                sys.exit(1)
+        
+        elif key == 'batch_size':
+            try:
+                batch_size = int(value)
+                if batch_size <= 0:
+                    print(f"Error: Batch size must be positive, got {batch_size}")
+                    sys.exit(1)
+                config['batch_size'] = batch_size
+            except ValueError:
+                print(f"Error: Batch size must be an integer, got '{value}'")
+                sys.exit(1)
+        
+        elif key == 'learning_rate':
+            try:
+                lr = float(value)
+                if lr <= 0:
+                    print(f"Error: Learning rate must be positive, got {lr}")
+                    sys.exit(1)
+                config['learning_rate'] = lr
+            except ValueError:
+                print(f"Error: Learning rate must be a number, got '{value}'")
+                sys.exit(1)
+    
+    return config
+
+
+def main():
+    """
+    Main training function with argument parsing
+    """
+    print("=" * 70)
+    print("MULTILAYER PERCEPTRON - TRAINING")
+    print("=" * 70)
+    
+    # Parse command line arguments
+    config = parse_arguments()
+    
+    # Display configuration
+    print("\nTraining Configuration:")
+    print("-" * 70)
+    print(f"Hidden Layer 1 Size: {config['hidden1_size']} neurons")
+    print(f"Hidden Layer 2 Size: {config['hidden2_size']} neurons")
+    print(f"Epochs: {config['epochs']}")
+    print(f"Batch Size: {config['batch_size']}")
+    print(f"Learning Rate: {config['learning_rate']}")
+    print("-" * 70)
+    
+    # Initialize network with parsed configuration
+    W1, b1, W2, b2, W3, b3 = initialize_network(
+        input_size=30,
+        hidden1_size=config['hidden1_size'],
+        hidden2_size=config['hidden2_size'],
+        output_size=2
+    )
+    
+    print("\nNetwork initialized successfully!")
+    print(f"Total parameters: {W1.size + b1.size + W2.size + b2.size + W3.size + b3.size}")
+    
+    # TODO: Load training data and start training loop
+    print("\nReady to start training...")
+    print("(Training loop implementation coming next)")
+    
+    print("\n" + "=" * 70)
+
+
+if __name__ == "__main__":
+    main()
