@@ -74,7 +74,7 @@ def preprocess_data(data):
     
     return features_normalized, labels_encoded
 
-def split_dataset(features, labels, train_ratio=0.8):
+def split_dataset(features, labels, train_ratio=0.8, seed=42):
     """
     Split dataset into training and validation sets
     
@@ -82,6 +82,7 @@ def split_dataset(features, labels, train_ratio=0.8):
         features: Normalized feature matrix
         labels: Encoded labels
         train_ratio: Ratio of training data (default 0.8)
+        seed: Random seed for reproducibility (default 42)
         
     Returns:
         tuple: (X_train, y_train, X_val, y_val)
@@ -90,6 +91,9 @@ def split_dataset(features, labels, train_ratio=0.8):
     
     # Get dataset size
     n_samples = len(features)
+    
+    # Set seed for reproducibility
+    np.random.seed(seed)
     
     # Create random indices
     indices = np.random.permutation(n_samples)
@@ -120,6 +124,7 @@ def split_dataset(features, labels, train_ratio=0.8):
     print(f"Validation set distribution: {val_malignant} malignant, {val_benign} benign")
     
     return X_train, y_train, X_val, y_val
+
 
 def save_splits(X_train, y_train, X_val, y_val, train_file, val_file):
     """
