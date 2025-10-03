@@ -86,7 +86,7 @@ def preprocess_data(data):
     
     return features_normalized, labels_encoded, ids
 
-def split_dataset(features, labels, ids, train_ratio=0.8):
+def split_dataset(features, labels, ids, train_ratio=0.8, seed=42):
     """
     Split dataset into training and validation sets
     
@@ -103,6 +103,9 @@ def split_dataset(features, labels, ids, train_ratio=0.8):
     
     # Get dataset size
     n_samples = len(features)
+
+    # Set seed for reproducibility
+    np.random.seed(seed)
     
     # Create random indices
     indices = np.random.permutation(n_samples)
