@@ -170,20 +170,34 @@ def calculate_accuracy(y_true, y_pred):
     
     return accuracy_score
 
-def get_csv_line_count(filepath):
+def get_csv_info(filepath):
     """
-    Get the number of data rows in a CSV file
+    Get the number of data rows and feature columns in a CSV file
     
     Args:
         filepath: Path to the CSV file
         
     Returns:
-        int: Number of rows in the file
+        dict: {'lines': number of rows, 'features': number of feature columns (excluding ID and label)}
     """
     try:
         with open(filepath, 'r') as f:
-            line_count = sum(1 for line in f)
-        return line_count
+            lines = f.readlines()
+            line_count = len(lines)
+            
+            # Get number of columns from first line
+            if line_count > 0:
+                first_line = lines[0].strip()
+                total_columns = len(first_line.split(','))
+                # Subtract 2 columns (ID and label) to get feature count
+                feature_columns = total_columns - 2
+            else:
+                feature_columns = 0
+        
+        return {
+            'lines': line_count,
+            'features': feature_columns
+        }
     except FileNotFoundError:
         print(f"Error: File '{filepath}' not found")
         sys.exit(1)
@@ -212,6 +226,9 @@ def parse_arguments():
     
     # Track which keys have been used
     used_keys = set()
+    
+    # Get training data dimensions once at the beginning
+    csv_data = get_csv_info('data_training.csv')
     
     args = sys.argv[1:]  # Skip program name
     i = 0
@@ -294,6 +311,13 @@ def parse_arguments():
                         print(f"Error: Hidden layer {idx + 1} size must be at least 4, got {size}")
                         sys.exit(1)
                 
+                # Validation: Layer sizes must not exceed number of input features
+                n_features = csv_data['features']
+                for idx, size in enumerate(layer_sizes[:2]):
+                    if size > n_features:
+                        print(f"Error: Hidden layer {idx + 1} size ({size}) cannot exceed number of input features ({n_features})")
+                        sys.exit(1)
+                
                 # Validation: Second layer must be <= first layer
                 if len(layer_sizes) >= 2:
                     if layer_sizes[1] > layer_sizes[0]:
@@ -337,7 +361,7 @@ def parse_arguments():
                     sys.exit(1)
         
                 # Maximum validation based on training data size
-                n_train_samples = get_csv_line_count('data_training.csv')
+                n_train_samples = csv_data['lines']
         
                 # Batch size should not exceed training data
                 if batch_size > n_train_samples:
@@ -374,7 +398,6 @@ def parse_arguments():
                 sys.exit(1)
     
     return config
-
 
 def main():
     """
