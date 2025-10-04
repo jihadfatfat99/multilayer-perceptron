@@ -108,9 +108,6 @@ def cross_entropy(y_true, y_pred):
     Returns:
         float: Average cross-entropy loss across the mini-batch
     """
-    # Get batch size
-    m = y_true.shape[0]
-    
     # Clip predictions to prevent log(0)
     epsilon = 1e-15
     y_pred_clipped = np.clip(y_pred, epsilon, 1 - epsilon)
@@ -218,7 +215,7 @@ def parse_arguments():
         'hidden2_size': 15,
         'epochs': 100,
         'batch_size': 32,
-        'learning_rate': 0.01
+        'learning_rate': 0.01,     
     }
     
     # Valid keys
@@ -226,8 +223,8 @@ def parse_arguments():
     
     # Track which keys have been used
     used_keys = set()
-    
-    # Get training data dimensions once at the beginning
+
+    # Get training data dimensions (number of samples and feature columns)
     csv_data = get_csv_info('data_training.csv')
     
     args = sys.argv[1:]  # Skip program name
@@ -280,8 +277,7 @@ def parse_arguments():
         if key == 'layer':
             # Parse hidden layer sizes
             layer_sizes = []
-            # Collect all numbers until next -- argument or end
-            temp_i = i - 1  # Back to value position
+            temp_i = i - 1
             while temp_i < len(args) and not args[temp_i].startswith('--'):
                 try:
                     size = int(args[temp_i])
@@ -294,10 +290,8 @@ def parse_arguments():
                     print(f"Error: Layer size must be an integer, got '{args[temp_i]}'")
                     sys.exit(1)
             
-            # Update i to skip all parsed layer sizes
             i = temp_i
             
-            # Validation: Check number of layer values
             if len(layer_sizes) == 1:
                 print(f"Error: --layer requires exactly 2 values (hidden layer 1 and hidden layer 2 sizes), got only 1")
                 sys.exit(1)
@@ -305,20 +299,19 @@ def parse_arguments():
             if len(layer_sizes) == 0:
                 print(f"Warning: No valid layer sizes provided, using defaults")
             else:
-                # Validation: Check minimum size (must be at least 4 neurons)
-                for idx, size in enumerate(layer_sizes[:2]):  # Check only first 2
+                for idx, size in enumerate(layer_sizes[:2]):
                     if size < 4:
                         print(f"Error: Hidden layer {idx + 1} size must be at least 4, got {size}")
                         sys.exit(1)
                 
-                # Validation: Layer sizes must not exceed number of input features
+                # Get feature count from training file
                 n_features = csv_data['features']
+                
                 for idx, size in enumerate(layer_sizes[:2]):
                     if size > n_features:
                         print(f"Error: Hidden layer {idx + 1} size ({size}) cannot exceed number of input features ({n_features})")
                         sys.exit(1)
                 
-                # Validation: Second layer must be <= first layer
                 if len(layer_sizes) >= 2:
                     if layer_sizes[1] > layer_sizes[0]:
                         print(f"Error: Hidden layer 2 size ({layer_sizes[1]}) must be less than or equal to hidden layer 1 size ({layer_sizes[0]})")
@@ -354,28 +347,25 @@ def parse_arguments():
                 if batch_size <= 0:
                     print(f"Error: Batch size must be positive, got {batch_size}")
                     sys.exit(1)
-        
-                # Basic range validation - minimum
+                
                 if batch_size < 4:
                     print(f"Error: Batch size too small (< 4). Use at least 4 samples per batch for stable gradients.")
                     sys.exit(1)
-        
-                # Maximum validation based on training data size
+                
+                # Get training data size
                 n_train_samples = csv_data['lines']
-        
-                # Batch size should not exceed training data
+                
                 if batch_size > n_train_samples:
                     print(f"Error: Batch size ({batch_size}) cannot be larger than training data size ({n_train_samples})")
                     sys.exit(1)
-        
-                # Batch size should allow at least 2 batches for effective mini-batch training
+                
                 if batch_size > n_train_samples // 2:
                     print(f"Error: Batch size ({batch_size}) is too large (> {n_train_samples // 2}).")
                     print(f"For effective mini-batch training, use batch size between 4 and {n_train_samples // 2}")
                     sys.exit(1)
-        
+                
                 config['batch_size'] = batch_size
-        
+            
             except ValueError:
                 print(f"Error: Batch size must be an integer, got '{value}'")
                 sys.exit(1)
@@ -420,27 +410,26 @@ def main():
     print(f"Learning Rate: {config['learning_rate']}")
     print("-" * 70)
     
-    # Load training data to get actual sample count
+    # Load training data using config file path
     print("\nLoading training data...")
     try:
         data = np.loadtxt('data_training.csv', delimiter=',')
-        y_train = data[:, 0].astype(int)
-        X_train = data[:, 1:]
+        y_train = data[:, 1].astype(int)  # Label column
+        X_train = data[:, 2:]              # Feature columns
         n_samples = X_train.shape[0]
         print(f"Training data loaded: {n_samples} samples, {X_train.shape[1]} features")
     except FileNotFoundError:
-        print("Error: 'data_training.csv' not found. Please run split_data.py first.")
+        print(f"Error: 'data_training.csv' not found")
         sys.exit(1)
     
     # Calculate batch information
     batch_size = config['batch_size']
-    num_batches = (n_samples + batch_size - 1) // batch_size  # Ceiling division
+    num_batches = (n_samples + batch_size - 1) // batch_size
     
     print("\nBatch Information:")
     print("-" * 70)
     print(f"Total batches per epoch: {num_batches}")
     
-    # Calculate size of each batch
     for batch_idx in range(num_batches):
         start = batch_idx * batch_size
         end = min(start + batch_size, n_samples)
@@ -450,7 +439,7 @@ def main():
     
     # Initialize network with parsed configuration
     W1, b1, W2, b2, W3, b3 = initialize_network(
-        input_size=30,
+        input_size=X_train.shape[1],
         hidden1_size=config['hidden1_size'],
         hidden2_size=config['hidden2_size'],
         output_size=2
@@ -459,7 +448,6 @@ def main():
     print("\nNetwork initialized successfully!")
     print(f"Total parameters: {W1.size + b1.size + W2.size + b2.size + W3.size + b3.size}")
     
-    # TODO: Load training data and start training loop
     print("\nReady to start training...")
     print("(Training loop implementation coming next)")
     

@@ -8,17 +8,6 @@ import numpy as np
 import pandas as pd
 import sys
 
-def validate_csv_extension(filepath):
-    """
-    Validate that a file has .csv extension
-    
-    Args:
-        filepath: Path to validate
-    """
-    if not filepath.lower().endswith('.csv'):
-        print(f"Error: File '{filepath}' must have .csv extension")
-        sys.exit(1)
-
 def load_data(filepath):
     """
     Load the dataset from CSV file
@@ -170,21 +159,10 @@ def save_splits(X_train, y_train, X_val, y_val, train_file, val_file, train_ids,
 
 def main():
     """Main function"""
-    # Check for exactly 3 arguments (excluding program name)
-    if len(sys.argv) != 4:
-        print("Error: Exactly 3 arguments required")
-        print("Usage: python split_data.py <input_file> <training_output_file> <validation_output_file>")
-        print("Example: python split_data.py data.csv data_training.csv data_validation.csv")
-        sys.exit(1)
-    
-    # Get arguments
-    input_file = sys.argv[1]
-    train_output = sys.argv[2]
-    val_output = sys.argv[3]
-
-    # Validate CSV extensions for output files
-    validate_csv_extension(train_output)
-    validate_csv_extension(val_output)
+    # Use constant filenames
+    input_file = "data.csv"
+    train_output = "data_training.csv"
+    val_output = "data_validation.csv"
     
     # Fixed parameters
     train_ratio = 0.8
