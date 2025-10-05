@@ -1,5 +1,10 @@
 import numpy as np
 import sys
+import json
+
+# ============================================================================
+# NETWORK INITIALIZATION
+# ============================================================================
 
 def xavier_init(n_in, n_out):
     """
@@ -46,8 +51,12 @@ def initialize_network(input_size=30, hidden1_size=20, hidden2_size=10, output_s
     W1, b1 = xavier_init(input_size, hidden1_size)      # 30 -> 20
     W2, b2 = xavier_init(hidden1_size, hidden2_size)    # 20 -> 10
     W3, b3 = xavier_init(hidden2_size, output_size)     # 10 -> 2
-    
+
     return W1, b1, W2, b2, W3, b3
+
+# ============================================================================
+# ACTIVATION FUNCTIONS
+# ============================================================================
 
 def sigmoid(x):
     """
@@ -96,6 +105,10 @@ def sigmoid_prime(x):
     """
     sig_x = sigmoid(x)
     return sig_x * (1 - sig_x)
+
+# ============================================================================
+# LOSS AND METRICS
+# ============================================================================
 
 def cross_entropy(y_true, y_pred):
     """
@@ -164,8 +177,12 @@ def calculate_accuracy(y_true, y_pred):
     # Calculate accuracy
     total_predictions = len(y_true)
     accuracy_score = correct_predictions / total_predictions
-    
+
     return accuracy_score
+
+# ============================================================================
+# DATA LOADING AND PREPROCESSING
+# ============================================================================
 
 def get_csv_info(filepath):
     """
@@ -202,6 +219,91 @@ def get_csv_info(filepath):
         print(f"Error reading file '{filepath}': {e}")
         sys.exit(1)
 
+def get_training_and_validation_data(training_filename, validation_filename):
+    """
+    Load training and validation data from CSV files
+
+    Args:
+        training_filename: Path to the training CSV file
+        validation_filename: Path to the validation CSV file
+
+    Returns:
+        list: [[[x_train], [y_train]], [[x_val], [y_val]]] where:
+              x_train: features matrix from training file (m_train x features)
+              y_train: labels vector from training file with values 0 or 1
+              x_val: features matrix from validation file (m_val x features)
+              y_val: labels vector from validation file with values 0 or 1
+    """
+    # Load training data
+    try:
+        train_data = np.loadtxt(training_filename, delimiter=',')
+        # Skip first column (ID), get labels (column 1) and features (columns 2+)
+        Y_train = train_data[:, 1].astype(int)  # Label column (1 for M, 0 for B)
+        X_train = train_data[:, 2:]              # Feature columns
+    except FileNotFoundError:
+        print(f"Error: '{training_filename}' not found")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error reading training file '{training_filename}': {e}")
+        sys.exit(1)
+
+    # Load validation data
+    try:
+        val_data = np.loadtxt(validation_filename, delimiter=',')
+        # Skip first column (ID), get labels (column 1) and features (columns 2+)
+        Y_val = val_data[:, 1].astype(int)  # Label column (1 for M, 0 for B)
+        X_val = val_data[:, 2:]              # Feature columns
+    except FileNotFoundError:
+        print(f"Error: '{validation_filename}' not found")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error reading validation file '{validation_filename}': {e}")
+        sys.exit(1)
+
+    return [[X_train, Y_train], [X_val, Y_val]]
+
+def shuffle_and_split_into_mini_batches(training_data, batch_size):
+    """
+    Shuffle data and split into mini-batches
+
+    Args:
+        training_data: List containing [x_train, y_train] from get_training_and_validation_data
+        batch_size: Size of each mini-batch
+
+    Returns:
+        list: [[[X1], [Y1]], [[X2], [Y2]], ...] where:
+              Xi: features matrix of batch i with dimension (m x 30)
+              Yi: actual results vector of batch i with values 0 or 1
+    """
+    # Extract features and labels from training_data
+    X_train = training_data[0]  # Features matrix
+    Y_train = training_data[1]  # Labels vector
+    n_samples = X_train.shape[0]
+
+    # Shuffle the data (without seed for randomness)
+    indices = np.random.permutation(n_samples)
+    X_train_shuffled = X_train[indices]
+    Y_train_shuffled = Y_train[indices]
+
+    # Create mini-batches
+    num_batches = (n_samples + batch_size - 1) // batch_size
+    batches = []
+
+    for batch_idx in range(num_batches):
+        start = batch_idx * batch_size
+        end = min(start + batch_size, n_samples)
+
+        X_batch = X_train_shuffled[start:end]  # Shape: (m, 30)
+        Y_batch = Y_train_shuffled[start:end]  # Shape: (m,)
+
+        batches.append([X_batch, Y_batch])
+
+    return batches
+
+# ============================================================================
+# ARGUMENT PARSING
+# ============================================================================
+
 def parse_arguments():
     """
     Parse command line arguments for training configuration
@@ -211,11 +313,11 @@ def parse_arguments():
     """
     # Default values
     config = {
-        'hidden1_size': 22,
-        'hidden2_size': 15,
+        'hidden1_size': 20,
+        'hidden2_size': 10,
         'epochs': 100,
-        'batch_size': 32,
-        'learning_rate': 0.01,     
+        'batch_size': 20,
+        'learning_rate': 0.01,
     }
     
     # Valid keys
@@ -389,6 +491,221 @@ def parse_arguments():
     
     return config
 
+# ============================================================================
+# CORE TRAINING FUNCTIONS
+# ============================================================================
+
+def apply_feedforward(X, W1, b1, W2, b2, W3, b3):
+    """
+    Forward propagation through the neural network
+
+    Args:
+        X: Input features matrix, shape (m, 30) where m is batch size
+        W1: First layer weights, shape (30, hidden1_size)
+        b1: First layer biases, shape (hidden1_size,)
+        W2: Second layer weights, shape (hidden1_size, hidden2_size)
+        b2: Second layer biases, shape (hidden2_size,)
+        W3: Third layer weights, shape (hidden2_size, 2)
+        b3: Third layer biases, shape (2,)
+
+    Returns:
+        tuple: (Z1, A1, Z2, A2, Z3, A3) where:
+            Z1: Linear output of layer 1, shape (m, hidden1_size)
+            A1: Activated output of layer 1, shape (m, hidden1_size)
+            Z2: Linear output of layer 2, shape (m, hidden2_size)
+            A2: Activated output of layer 2, shape (m, hidden2_size)
+            Z3: Linear output of layer 3, shape (m, 2)
+            A3: Final output (softmax probabilities), shape (m, 2)
+    """
+    # Layer 1: Input -> Hidden1
+    Z1 = X @ W1 + b1        # Matrix multiplication: (m, 30) @ (30, h1) = (m, h1)
+    A1 = sigmoid(Z1)        # Apply sigmoid activation
+
+    # Layer 2: Hidden1 -> Hidden2
+    Z2 = A1 @ W2 + b2       # Matrix multiplication: (m, h1) @ (h1, h2) = (m, h2)
+    A2 = sigmoid(Z2)        # Apply sigmoid activation
+
+    # Layer 3: Hidden2 -> Output
+    Z3 = A2 @ W3 + b3       # Matrix multiplication: (m, h2) @ (h2, 2) = (m, 2)
+    A3 = softmax(Z3)        # Apply softmax activation
+
+    return Z1, A1, Z2, A2, Z3, A3
+
+def apply_backpropagation(X, Y, A1, A2, A3, Z1, Z2, W2, W3):
+    """
+    Backward propagation to compute gradients
+
+    Args:
+        X: Input features matrix, shape (m, 30)
+        Y: True labels vector, shape (m,) with values 0 or 1
+        A1: Activated output of layer 1, shape (m, hidden1_size)
+        A2: Activated output of layer 2, shape (m, hidden2_size)
+        A3: Final output (softmax probabilities), shape (m, 2)
+        Z1: Linear output of layer 1, shape (m, hidden1_size)
+        Z2: Linear output of layer 2, shape (m, hidden2_size)
+        W2: Second layer weights, shape (hidden1_size, hidden2_size)
+        W3: Third layer weights, shape (hidden2_size, 2)
+
+    Returns:
+        tuple: (dW1, db1, dW2, db2, dW3, db3) - Gradients for all weights and biases
+    """
+    m = X.shape[0]  # Batch size
+
+    # Convert Y to one-hot encoding: shape (m, 2)
+    # Network output: A3[:, 0] = P(M), A3[:, 1] = P(B)
+    # Y encoding: Y=1 means M, Y=0 means B
+    # One-hot: Y=1 (M) → [1,0], Y=0 (B) → [0,1]
+    Y_one_hot = np.zeros((m, 2))
+    Y_one_hot[range(m), 1 - Y] = 1  # Flip index: Y=1→index 0, Y=0→index 1
+
+    # Output layer gradient (Layer 3)
+    # dZ3 = 1/m * (A3 - Y)
+    dZ3 = (1 / m) * (A3 - Y_one_hot)  # Shape: (m, 2)
+
+    # Layer 3 gradients
+    dW3 = A2.T @ dZ3           # (hidden2_size, m) @ (m, 2) = (hidden2_size, 2)
+    db3 = np.sum(dZ3, axis=0)  # Sum over batch, shape (2,)
+
+    # Layer 2 gradient
+    dA2 = dZ3 @ W3.T           # (m, 2) @ (2, hidden2_size) = (m, hidden2_size)
+    dZ2 = dA2 * sigmoid_prime(Z2)  # Element-wise multiplication with sigmoid derivative
+
+    # Layer 2 gradients
+    dW2 = A1.T @ dZ2           # (hidden1_size, m) @ (m, hidden2_size) = (hidden1_size, hidden2_size)
+    db2 = np.sum(dZ2, axis=0)  # Sum over batch, shape (hidden2_size,)
+
+    # Layer 1 gradient
+    dA1 = dZ2 @ W2.T           # (m, hidden2_size) @ (hidden2_size, hidden1_size) = (m, hidden1_size)
+    dZ1 = dA1 * sigmoid_prime(Z1)  # Element-wise multiplication with sigmoid derivative
+
+    # Layer 1 gradients
+    dW1 = X.T @ dZ1            # (30, m) @ (m, hidden1_size) = (30, hidden1_size)
+    db1 = np.sum(dZ1, axis=0)  # Sum over batch, shape (hidden1_size,)
+
+    return dW1, db1, dW2, db2, dW3, db3
+
+def apply_gradient_descent(W1, b1, W2, b2, W3, b3, dW1, db1, dW2, db2, dW3, db3, learning_rate):
+    """
+    Update weights and biases using gradient descent
+
+    Args:
+        W1: First layer weights, shape (30, hidden1_size)
+        b1: First layer biases, shape (hidden1_size,)
+        W2: Second layer weights, shape (hidden1_size, hidden2_size)
+        b2: Second layer biases, shape (hidden2_size,)
+        W3: Third layer weights, shape (hidden2_size, 2)
+        b3: Third layer biases, shape (2,)
+        dW1: Gradient for W1
+        db1: Gradient for b1
+        dW2: Gradient for W2
+        db2: Gradient for b2
+        dW3: Gradient for W3
+        db3: Gradient for b3
+        learning_rate: Learning rate (alpha)
+
+    Returns:
+        tuple: (W1, b1, W2, b2, W3, b3) - Updated weights and biases
+    """
+    # Update weights and biases
+    W1 = W1 - learning_rate * dW1
+    b1 = b1 - learning_rate * db1
+    W2 = W2 - learning_rate * dW2
+    b2 = b2 - learning_rate * db2
+    W3 = W3 - learning_rate * dW3
+    b3 = b3 - learning_rate * db3
+
+    return W1, b1, W2, b2, W3, b3
+
+# ============================================================================
+# TRAINING LOOP
+# ============================================================================
+
+def training_loop(W1, b1, W2, b2, W3, b3, training_data, validation_data, epochs, batch_size, learning_rate):
+    """
+    Train the multilayer perceptron using mini-batch gradient descent.
+
+    Parameters:
+    -----------
+    W1, b1, W2, b2, W3, b3 : numpy.ndarray
+        Initial weights and biases for all three layers
+    training_data : list
+        [X_train, Y_train] from get_training_and_validation_data
+    validation_data : list
+        [X_val, Y_val] from get_training_and_validation_data
+    epochs : int
+        Number of training epochs
+    batch_size : int
+        Size of mini-batches
+    learning_rate : float
+        Learning rate for gradient descent
+
+    Returns:
+    --------
+    tuple : (W1, b1, W2, b2, W3, b3)
+        Trained weights and biases for all three layers
+    """
+    # Open log file
+    with open('logs.txt', 'w') as log_file:
+        msg = "\nStarting training..."
+        print(msg)
+        log_file.write(msg + '\n')
+
+        msg = "=" * 70
+        print(msg)
+        log_file.write(msg + '\n')
+
+        for epoch in range(epochs):
+            # Training phase
+            batches = shuffle_and_split_into_mini_batches(training_data, batch_size)
+            total_losses = 0
+
+            msg = f"\nEpoch {epoch + 1}/{epochs}"
+            print(msg)
+            log_file.write(msg + '\n')
+
+            msg = f"  Processing {len(batches)} mini-batches..."
+            print(msg)
+            log_file.write(msg + '\n')
+
+            for X, Y in batches:
+                Z1, A1, Z2, A2, _, A3 = apply_feedforward(X, W1, b1, W2, b2, W3, b3)
+                dW1, db1, dW2, db2, dW3, db3 = apply_backpropagation(X, Y, A1, A2, A3, Z1, Z2, W2, W3)
+                W1, b1, W2, b2, W3, b3 = apply_gradient_descent(W1, b1, W2, b2, W3, b3, dW1, db1, dW2, db2, dW3, db3, learning_rate)
+                total_losses = total_losses + cross_entropy(Y, A3)
+
+            # Calculate epoch metrics
+            epoch_training_loss = total_losses / len(batches)
+            *_, A3_val = apply_feedforward(validation_data[0], W1, b1, W2, b2, W3, b3)
+            epoch_validation_loss = cross_entropy(validation_data[1], A3_val)
+            epoch_validation_accuracy = calculate_accuracy(validation_data[1], A3_val)
+
+            # Print epoch summary
+            msg = f"  Training Loss:       {epoch_training_loss:.6f}"
+            print(msg)
+            log_file.write(msg + '\n')
+
+            msg = f"  Validation Loss:     {epoch_validation_loss:.6f}"
+            print(msg)
+            log_file.write(msg + '\n')
+
+            msg = f"  Validation Accuracy: {epoch_validation_accuracy:.4f} ({epoch_validation_accuracy * 100:.2f}%)"
+            print(msg)
+            log_file.write(msg + '\n')
+
+        msg = "\n" + "=" * 70
+        print(msg)
+        log_file.write(msg + '\n')
+
+        msg = "Training completed!"
+        print(msg)
+        log_file.write(msg + '\n')
+
+    return W1, b1, W2, b2, W3, b3
+
+# ============================================================================
+# MAIN FUNCTION
+# ============================================================================
+
 def main():
     """
     Main training function with argument parsing
@@ -410,48 +727,56 @@ def main():
     print(f"Learning Rate: {config['learning_rate']}")
     print("-" * 70)
     
-    # Load training data using config file path
-    print("\nLoading training data...")
-    try:
-        data = np.loadtxt('data_training.csv', delimiter=',')
-        y_train = data[:, 1].astype(int)  # Label column
-        X_train = data[:, 2:]              # Feature columns
-        n_samples = X_train.shape[0]
-        print(f"Training data loaded: {n_samples} samples, {X_train.shape[1]} features")
-    except FileNotFoundError:
-        print(f"Error: 'data_training.csv' not found")
-        sys.exit(1)
-    
-    # Calculate batch information
-    batch_size = config['batch_size']
-    num_batches = (n_samples + batch_size - 1) // batch_size
-    
-    print("\nBatch Information:")
-    print("-" * 70)
-    print(f"Total batches per epoch: {num_batches}")
-    
-    for batch_idx in range(num_batches):
-        start = batch_idx * batch_size
-        end = min(start + batch_size, n_samples)
-        batch_length = end - start
-        print(f"  Batch {batch_idx + 1}: {batch_length} samples (indices {start}-{end-1})")
-    print("-" * 70)
-    
+    # Load data
+    data = get_training_and_validation_data('data_training.csv', 'data_validation.csv')
+
     # Initialize network with parsed configuration
     W1, b1, W2, b2, W3, b3 = initialize_network(
-        input_size=X_train.shape[1],
+        input_size=30,
         hidden1_size=config['hidden1_size'],
         hidden2_size=config['hidden2_size'],
         output_size=2
     )
-    
-    print("\nNetwork initialized successfully!")
+
+    print(f"\nNetwork initialized successfully!")
     print(f"Total parameters: {W1.size + b1.size + W2.size + b2.size + W3.size + b3.size}")
-    
-    print("\nReady to start training...")
-    print("(Training loop implementation coming next)")
-    
+
+    # Train the network
+    W1, b1, W2, b2, W3, b3 = training_loop(
+        W1, b1, W2, b2, W3, b3,
+        data[0],  # training_data
+        data[1],  # validation_data
+        config['epochs'],
+        config['batch_size'],
+        config['learning_rate']
+    )
+
+    # Save trained model to JSON
+    model_data = {
+        'architecture': {
+            'input_size': 30,
+            'hidden1_size': config['hidden1_size'],
+            'hidden2_size': config['hidden2_size'],
+            'output_size': 2
+        },
+        'weights': {
+            'W1': W1.tolist(),
+            'W2': W2.tolist(),
+            'W3': W3.tolist()
+        },
+        'biases': {
+            'b1': b1.tolist(),
+            'b2': b2.tolist(),
+            'b3': b3.tolist()
+        }
+    }
+
+    with open('model.json', 'w') as f:
+        json.dump(model_data, f, indent=2)
+
     print("\n" + "=" * 70)
+    print("Training finished! Model saved to model.json")
+    print("=" * 70)
 
 if __name__ == "__main__":
     main()
