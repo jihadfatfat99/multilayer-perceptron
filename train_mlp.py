@@ -1,6 +1,7 @@
 import numpy as np
 import sys
 import json
+import matplotlib.pyplot as plt
 
 # ============================================================================
 # NETWORK INITIALIZATION
@@ -313,11 +314,11 @@ def parse_arguments():
     """
     # Default values
     config = {
-        'hidden1_size': 20,
-        'hidden2_size': 10,
-        'epochs': 100,
-        'batch_size': 20,
-        'learning_rate': 0.01,
+        'hidden1_size': 22,
+        'hidden2_size': 16,
+        'epochs': 300,
+        'batch_size': 40,
+        'learning_rate': 0.058,
     }
     
     # Valid keys
@@ -617,6 +618,49 @@ def apply_gradient_descent(W1, b1, W2, b2, W3, b3, dW1, db1, dW2, db2, dW3, db3,
     return W1, b1, W2, b2, W3, b3
 
 # ============================================================================
+# PLOTTING
+# ============================================================================
+
+def plot_training_curves(train_losses, val_losses, train_accuracies, val_accuracies, epochs):
+    """
+    Plot training and validation loss and accuracy curves
+
+    Args:
+        train_losses: List of training losses per epoch
+        val_losses: List of validation losses per epoch
+        train_accuracies: List of training accuracies per epoch
+        val_accuracies: List of validation accuracies per epoch
+        epochs: Number of epochs
+    """
+    epoch_range = range(1, epochs + 1)
+
+    # Create figure with 2 subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Plot Loss
+    ax1.plot(epoch_range, train_losses, 'b-', label='Training Loss', linewidth=2)
+    ax1.plot(epoch_range, val_losses, 'r-', label='Validation Loss', linewidth=2)
+    ax1.set_xlabel('Epoch', fontsize=12)
+    ax1.set_ylabel('Loss', fontsize=12)
+    ax1.set_title('Training and Validation Loss', fontsize=14, fontweight='bold')
+    ax1.legend(fontsize=10)
+    ax1.grid(True, alpha=0.3)
+
+    # Plot Accuracy
+    ax2.plot(epoch_range, train_accuracies, 'b-', label='Training Accuracy', linewidth=2)
+    ax2.plot(epoch_range, val_accuracies, 'r-', label='Validation Accuracy', linewidth=2)
+    ax2.set_xlabel('Epoch', fontsize=12)
+    ax2.set_ylabel('Accuracy', fontsize=12)
+    ax2.set_title('Training and Validation Accuracy', fontsize=14, fontweight='bold')
+    ax2.legend(fontsize=10)
+    ax2.grid(True, alpha=0.3)
+
+    # Adjust layout and display
+    plt.tight_layout()
+    # plt.show()
+    plt.savefig('training_metrics.png')
+
+# ============================================================================
 # TRAINING LOOP
 # ============================================================================
 
@@ -644,6 +688,12 @@ def training_loop(W1, b1, W2, b2, W3, b3, training_data, validation_data, epochs
     tuple : (W1, b1, W2, b2, W3, b3)
         Trained weights and biases for all three layers
     """
+    # Initialize lists to store metrics for plotting
+    train_losses = []
+    train_accuracies = []
+    val_losses = []
+    val_accuracies = []
+
     # Open log file
     with open('logs.txt', 'w') as log_file:
         msg = "\nStarting training..."
@@ -658,6 +708,7 @@ def training_loop(W1, b1, W2, b2, W3, b3, training_data, validation_data, epochs
             # Training phase
             batches = shuffle_and_split_into_mini_batches(training_data, batch_size)
             total_losses = 0
+            total_accuracies = 0
 
             msg = f"\nEpoch {epoch + 1}/{epochs}"
             print(msg)
@@ -672,15 +723,27 @@ def training_loop(W1, b1, W2, b2, W3, b3, training_data, validation_data, epochs
                 dW1, db1, dW2, db2, dW3, db3 = apply_backpropagation(X, Y, A1, A2, A3, Z1, Z2, W2, W3)
                 W1, b1, W2, b2, W3, b3 = apply_gradient_descent(W1, b1, W2, b2, W3, b3, dW1, db1, dW2, db2, dW3, db3, learning_rate)
                 total_losses = total_losses + cross_entropy(Y, A3)
+                total_accuracies = total_accuracies + calculate_accuracy(Y, A3)
 
             # Calculate epoch metrics
             epoch_training_loss = total_losses / len(batches)
+            epoch_training_accuracy = total_accuracies / len(batches)
             *_, A3_val = apply_feedforward(validation_data[0], W1, b1, W2, b2, W3, b3)
             epoch_validation_loss = cross_entropy(validation_data[1], A3_val)
             epoch_validation_accuracy = calculate_accuracy(validation_data[1], A3_val)
 
+            # Store metrics for plotting
+            train_losses.append(epoch_training_loss)
+            train_accuracies.append(epoch_training_accuracy)
+            val_losses.append(epoch_validation_loss)
+            val_accuracies.append(epoch_validation_accuracy)
+
             # Print epoch summary
             msg = f"  Training Loss:       {epoch_training_loss:.6f}"
+            print(msg)
+            log_file.write(msg + '\n')
+
+            msg = f"  Training Accuracy:   {epoch_training_accuracy:.4f} ({epoch_training_accuracy * 100:.2f}%)"
             print(msg)
             log_file.write(msg + '\n')
 
@@ -699,6 +762,9 @@ def training_loop(W1, b1, W2, b2, W3, b3, training_data, validation_data, epochs
         msg = "Training completed!"
         print(msg)
         log_file.write(msg + '\n')
+
+    # Plot training curves
+    plot_training_curves(train_losses, val_losses, train_accuracies, val_accuracies, epochs)
 
     return W1, b1, W2, b2, W3, b3
 
