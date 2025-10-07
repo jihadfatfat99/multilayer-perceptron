@@ -7,6 +7,8 @@ Splits the breast cancer dataset into training and validation sets
 import numpy as np
 import pandas as pd
 import sys
+import argparse
+import os
 
 def load_data(filepath):
     """
@@ -30,50 +32,6 @@ def load_data(filepath):
         print(f"Error loading data: {e}")
         sys.exit(1)
 
-def preprocess_data(data):
-    """
-    Preprocess the dataset
-    
-    Args:
-        data: Raw data array
-        
-    Returns:
-        tuple: (features, labels, ids)
-    """
-    print("Preprocessing data...")
-    
-    # Extract components
-    # Column 0: ID
-    # Column 1: Diagnosis (M/B)
-    # Columns 2-31: 30 features
-    
-    ids = data[:, 0]  # ID column
-    labels = data[:, 1]  # Diagnosis column
-    features = data[:, 2:32].astype(float)  # Feature columns
-    
-    # Convert labels M/B to 1/0
-    labels_encoded = np.where(labels == 'M', 1, 0)
-    
-    # Count class distribution
-    malignant_count = np.sum(labels_encoded)
-    benign_count = len(labels_encoded) - malignant_count
-    
-    print(f"Class distribution:")
-    print(f"  Malignant (M): {malignant_count} samples")
-    print(f"  Benign (B): {benign_count} samples")
-    
-    # Normalize features (standardization: mean=0, std=1)
-    mean = np.mean(features, axis=0)
-    std = np.std(features, axis=0)
-    
-    # Avoid division by zero
-    std = np.where(std == 0, 1, std)
-    features_normalized = (features - mean) / std
-    
-    print(f"Features normalized: mean ≈ 0, std ≈ 1")
-    print(f"Feature matrix shape: {features_normalized.shape}")
-    
-    return features_normalized, labels_encoded, ids
 
 def split_dataset(features, labels, ids, train_ratio=0.8, seed=42):
     """
@@ -119,10 +77,10 @@ def split_dataset(features, labels, ids, train_ratio=0.8, seed=42):
     print(f"Validation set: {len(X_val)} samples")
     
     # Check class distribution in splits
-    train_malignant = np.sum(y_train)
-    train_benign = len(y_train) - train_malignant
-    val_malignant = np.sum(y_val)
-    val_benign = len(y_val) - val_malignant
+    train_malignant = np.sum(y_train == 'M')
+    train_benign = np.sum(y_train == 'B')
+    val_malignant = np.sum(y_val == 'M')
+    val_benign = np.sum(y_val == 'B')
     
     print(f"Training set distribution: {train_malignant} malignant, {train_benign} benign")
     print(f"Validation set distribution: {val_malignant} malignant, {val_benign} benign")
@@ -147,8 +105,8 @@ def save_splits(X_train, y_train, X_val, y_val, train_file, val_file, train_ids,
     train_data = np.column_stack((train_ids, y_train, X_train))
     val_data = np.column_stack((val_ids, y_val, X_val))
     
-    # Save with mixed formatting: integers for first 2 columns, floats for rest
-    fmt = '%d,%d' + ',%.6f' * X_train.shape[1]  # ← CHANGE THIS
+    # Save with mixed formatting: integer for ID, string for label, floats for features
+    fmt = '%d,%s' + ',%g' * X_train.shape[1]
 
     # Save to CSV files (no headers)
     np.savetxt(train_file, train_data, delimiter=',', fmt=fmt)
@@ -157,12 +115,58 @@ def save_splits(X_train, y_train, X_val, y_val, train_file, val_file, train_ids,
     print(f"Training data saved to: {train_file}")
     print(f"Validation data saved to: {val_file}")
 
+def parse_arguments():
+    """
+    Parse and validate command line arguments
+    
+    Returns:
+        tuple: (data_filename, training_filename, validation_filename)
+    """
+    parser = argparse.ArgumentParser(description='Split dataset into training and validation sets')
+    parser.add_argument('--data_filename', type=str, help='Input CSV data filename')
+    parser.add_argument('--training_filename', type=str, nargs='?', const='', help='Output training CSV filename')
+    parser.add_argument('--validation_filename', type=str, nargs='?', const='', help='Output validation CSV filename')
+    
+    args = parser.parse_args()
+    
+    # Check for required data_filename
+    if not args.data_filename:
+        print("Error: --data_filename is required")
+        sys.exit(1)
+    
+    # Check if data file exists
+    if not os.path.exists(args.data_filename):
+        print(f"Error: File '{args.data_filename}' does not exist")
+        sys.exit(1)
+    
+    # Check if data file ends with .csv
+    if not args.data_filename.lower().endswith('.csv'):
+        print(f"Error: File '{args.data_filename}' must be a CSV file")
+        sys.exit(1)
+    
+    # Set default filenames if not provided or empty
+    training_filename = args.training_filename if args.training_filename else 'data_training.csv'
+    validation_filename = args.validation_filename if args.validation_filename else 'data_validation.csv'
+    
+    # Check for duplicate filenames
+    if args.data_filename == training_filename:
+        print("Error: Training filename cannot be the same as data filename")
+        sys.exit(1)
+    
+    if args.data_filename == validation_filename:
+        print("Error: Validation filename cannot be the same as data filename")
+        sys.exit(1)
+    
+    if training_filename == validation_filename:
+        print("Error: Training and validation filenames cannot be the same")
+        sys.exit(1)
+    
+    return args.data_filename, training_filename, validation_filename
+
 def main():
     """Main function"""
-    # Use constant filenames
-    input_file = "data.csv"
-    train_output = "data_training.csv"
-    val_output = "data_validation.csv"
+    # Parse command line arguments
+    input_file, train_output, val_output = parse_arguments()
     
     # Fixed parameters
     train_ratio = 0.8
@@ -174,8 +178,16 @@ def main():
     # Load data
     data = load_data(input_file)
     
-    # Preprocess data
-    features, labels, ids = preprocess_data(data)
+    # Extract components (simplified preprocessing without normalization)
+    # Column 0: ID
+    # Column 1: Diagnosis (M/B)
+    # Columns 2-31: 30 features
+    
+    ids = data[:, 0]  # ID column
+    labels = data[:, 1]  # Diagnosis column (keep as M/B)
+    features = data[:, 2:32].astype(float)  # Feature columns
+    
+    print(f"Dataset loaded: {data.shape[0]} samples, {features.shape[1]} features")
     
     # Split dataset
     X_train, y_train, X_val, y_val, train_ids, val_ids = split_dataset(features, labels, ids, train_ratio)
