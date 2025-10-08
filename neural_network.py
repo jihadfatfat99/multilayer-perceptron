@@ -109,17 +109,13 @@ class Layer:
         self.dW = None  # Weight gradients
         self.db = None  # Bias gradients
 
-    def initialize_weights(self, input_size, seed=None):
+    def initialize_weights(self, input_size):
         """
         Initialize weights and biases using Xavier/Glorot initialization
 
         Args:
             input_size: Number of inputs to this layer (neurons from previous layer)
-            seed: Random seed for reproducibility (optional)
         """
-        if seed is not None:
-            np.random.seed(seed)
-
         # Xavier initialization
         limit = np.sqrt(6.0 / (input_size + self.neurons))
         self.weights = np.random.uniform(-limit, limit, size=(input_size, self.neurons))
@@ -197,28 +193,22 @@ class NeuralNetwork:
         self.layers.append(layer)
         return self
 
-    def initialize(self, seed=42):
+    def initialize(self):
         """
         Initialize all weights and biases in the network
-
-        Args:
-            seed: Random seed for reproducibility
         """
         if len(self.layers) == 0:
             raise ValueError("Cannot initialize network with no layers. Add layers first.")
 
-        # Set global seed
-        np.random.seed(seed)
-
         # Initialize first layer
-        self.layers[0].initialize_weights(self.input_size, seed=seed)
+        self.layers[0].initialize_weights(self.input_size)
 
         # Initialize subsequent layers
         for i in range(1, len(self.layers)):
             prev_neurons = self.layers[i - 1].neurons
-            self.layers[i].initialize_weights(prev_neurons, seed=seed + i)
+            self.layers[i].initialize_weights(prev_neurons)
 
-    def forward(self, X):
+    def apply_feedforward(self, X):
         """
         Forward propagation through entire network
 
@@ -233,9 +223,16 @@ class NeuralNetwork:
             A = layer.forward(A)
         return A
 
-    def backward(self, X, Y, learning_rate):
+    def apply_backpropagation(self, X, Y, learning_rate):
         """
         Backward propagation through entire network
+
+        Following the exact equations from train_mlp.py:
+        - Layer L: dZ_L = (1/m) * (A_L - Y_one_hot)  [for softmax + cross-entropy]
+        - Layer l: dW_l = A_(l-1).T @ dZ_l
+        -          db_l = sum(dZ_l, axis=0)
+        -          dA_(l-1) = dZ_l @ W_l.T
+        -          dZ_(l-1) = dA_(l-1) * sigmoid_prime(Z_(l-1))
 
         Args:
             X: Input features, shape (batch_size, input_size)
@@ -258,7 +255,7 @@ class NeuralNetwork:
         # Compute output layer gradient
         output_layer = self.layers[-1]
         if output_layer.activation == 'softmax':
-            # Softmax + Cross-entropy derivative
+            # Softmax + Cross-entropy derivative: dZ = (1/m) * (A - Y_one_hot)
             dZ = (1 / m) * (output_layer.A - Y_one_hot)
         else:
             # For other activations (not typical for classification)
@@ -268,7 +265,7 @@ class NeuralNetwork:
             else:
                 dZ = dA
 
-        # Backpropagate through all layers
+        # Backpropagate through all layers (from output to input)
         for i in range(len(self.layers) - 1, -1, -1):
             current_layer = self.layers[i]
 
@@ -279,18 +276,19 @@ class NeuralNetwork:
                 A_prev = self.layers[i - 1].A
 
             # Compute gradients for weights and biases
+            # dW = A_prev.T @ dZ
+            # db = sum(dZ, axis=0)
             current_layer.dW = A_prev.T @ dZ
             current_layer.db = np.sum(dZ, axis=0)
 
-            # Update weights and biases
-            current_layer.weights -= learning_rate * current_layer.dW
-            current_layer.biases -= learning_rate * current_layer.db
-
-            # Compute gradient for previous layer (if not first layer)
+            # Compute gradient for previous layer BEFORE updating weights
+            # This is critical: we need current weights for backpropagation
             if i > 0:
+                # dA_prev = dZ @ W.T
                 dA_prev = dZ @ current_layer.weights.T
 
                 # Apply derivative of activation function
+                # dZ_prev = dA_prev * activation_derivative(Z_prev)
                 prev_layer = self.layers[i - 1]
                 if prev_layer.activation == 'sigmoid':
                     dZ = dA_prev * sigmoid_prime(prev_layer.Z)
@@ -298,6 +296,12 @@ class NeuralNetwork:
                     dZ = dA_prev
                 else:
                     dZ = dA_prev
+
+            # Now update weights and biases using gradient descent
+            # W = W - learning_rate * dW
+            # b = b - learning_rate * db
+            current_layer.weights -= learning_rate * current_layer.dW
+            current_layer.biases -= learning_rate * current_layer.db
 
     def train_batch(self, X, Y, learning_rate):
         """
@@ -312,14 +316,14 @@ class NeuralNetwork:
             tuple: (loss, accuracy) for this batch
         """
         # Forward propagation
-        output = self.forward(X)
+        output = self.apply_feedforward(X)
 
         # Calculate loss and accuracy
         loss = self.cross_entropy_loss(Y, output)
         accuracy = self.calculate_accuracy(Y, output)
 
         # Backward propagation
-        self.backward(X, Y, learning_rate)
+        self.apply_backpropagation(X, Y, learning_rate)
 
         return loss, accuracy
 
@@ -382,7 +386,7 @@ class NeuralNetwork:
         Returns:
             Predicted class labels, shape (batch_size,)
         """
-        output = self.forward(X)
+        output = self.apply_feedforward(X)
 
         if output.shape[1] == 2:
             # Binary classification
@@ -498,7 +502,7 @@ def example_usage():
     nn1.add_layer(neurons=20, layer_type='hidden', activation='sigmoid')
     nn1.add_layer(neurons=10, layer_type='hidden', activation='sigmoid')
     nn1.add_layer(neurons=2, layer_type='output', activation='softmax')
-    nn1.initialize(seed=42)
+    nn1.initialize()
     nn1.summary()
 
     # Example 2: 5-layer deep network
@@ -509,7 +513,7 @@ def example_usage():
     nn2.add_layer(neurons=15, layer_type='hidden', activation='sigmoid')
     nn2.add_layer(neurons=10, layer_type='hidden', activation='sigmoid')
     nn2.add_layer(neurons=2, layer_type='output', activation='softmax')
-    nn2.initialize(seed=42)
+    nn2.initialize()
     nn2.summary()
 
     # Example 3: Single hidden layer
@@ -517,13 +521,13 @@ def example_usage():
     nn3 = NeuralNetwork(input_size=30)
     nn3.add_layer(neurons=15, layer_type='hidden', activation='sigmoid')
     nn3.add_layer(neurons=2, layer_type='output', activation='softmax')
-    nn3.initialize(seed=42)
+    nn3.initialize()
     nn3.summary()
 
     # Test forward propagation with dummy data
     print("\nTesting forward propagation with dummy data...")
     X_dummy = np.random.randn(5, 30)  # 5 samples, 30 features
-    output = nn1.forward(X_dummy)
+    output = nn1.apply_feedforward(X_dummy)
     print(f"Input shape: {X_dummy.shape}")
     print(f"Output shape: {output.shape}")
     print(f"Output (probabilities):\n{output}")
