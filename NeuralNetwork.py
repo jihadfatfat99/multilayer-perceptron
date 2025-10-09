@@ -7,60 +7,7 @@ Flexible neural network with support for arbitrary number of layers
 import numpy as np
 import json
 import sys
-
-
-# ============================================================================
-# ACTIVATION FUNCTIONS
-# ============================================================================
-
-def sigmoid(x):
-    """
-    Sigmoid activation function
-
-    Args:
-        x: Input matrix/array of any shape
-
-    Returns:
-        Output matrix with sigmoid applied element-wise
-    """
-    # Clip x to prevent overflow in exp(-x)
-    x = np.clip(x, -500, 500)
-    return 1 / (1 + np.exp(-x))
-
-
-def sigmoid_prime(x):
-    """
-    Derivative of sigmoid function
-
-    Args:
-        x: Input matrix/array of any shape
-
-    Returns:
-        Derivative of sigmoid applied element-wise
-    """
-    sig_x = sigmoid(x)
-    return sig_x * (1 - sig_x)
-
-
-def softmax(x):
-    """
-    Softmax activation function
-
-    Args:
-        x: Input matrix of shape (batch_size, num_classes) or (num_classes,)
-
-    Returns:
-        Output matrix with softmax applied, same shape as input
-        Each row sums to 1.0 (probability distribution)
-    """
-    # Subtract max for numerical stability
-    x_stable = x - np.max(x, axis=-1, keepdims=True)
-
-    # Compute exponentials
-    exp_x = np.exp(x_stable)
-
-    # Compute softmax
-    return exp_x / np.sum(exp_x, axis=-1, keepdims=True)
+from nn_utils import sigmoid, sigmoid_prime, softmax
 
 
 # ============================================================================
@@ -74,7 +21,7 @@ class Layer:
     Attributes:
         neurons: Number of neurons in this layer
         layer_type: Type of layer ('input', 'hidden', 'output')
-        activation: Activation function ('sigmoid', 'softmax', 'linear')
+        activation: Activation function ('sigmoid', 'softmax')
         weights: Weight matrix (initialized during network construction)
         biases: Bias vector (initialized during network construction)
     """
@@ -86,7 +33,7 @@ class Layer:
         Args:
             neurons: Number of neurons in this layer
             layer_type: Type of layer ('input', 'hidden', 'output')
-            activation: Activation function ('sigmoid', 'softmax', 'linear')
+            activation: Activation function ('sigmoid', 'softmax')
         """
         if neurons <= 0:
             raise ValueError(f"Number of neurons must be positive, got {neurons}")
@@ -94,8 +41,8 @@ class Layer:
         if layer_type not in ['input', 'hidden', 'output']:
             raise ValueError(f"Invalid layer type '{layer_type}'. Must be 'input', 'hidden', or 'output'")
 
-        if activation not in ['sigmoid', 'softmax', 'linear']:
-            raise ValueError(f"Invalid activation '{activation}'. Must be 'sigmoid', 'softmax', or 'linear'")
+        if activation not in ['sigmoid', 'softmax']:
+            raise ValueError(f"Invalid activation '{activation}'. Must be 'sigmoid'or 'softmax'")
 
         self.neurons = neurons
         self.layer_type = layer_type
@@ -139,8 +86,6 @@ class Layer:
             self.A = sigmoid(self.Z)
         elif self.activation == 'softmax':
             self.A = softmax(self.Z)
-        elif self.activation == 'linear':
-            self.A = self.Z
         else:
             raise ValueError(f"Unknown activation function: {self.activation}")
 
@@ -242,28 +187,15 @@ class NeuralNetwork:
         m = X.shape[0]  # Batch size
 
         # Convert Y to one-hot encoding for output layer
-        num_classes = self.layers[-1].neurons
-        Y_one_hot = np.zeros((m, num_classes))
-
-        # For binary classification: Y=1 (M) → [1,0], Y=0 (B) → [0,1]
-        # Network output: A[:, 0] = P(class 0), A[:, 1] = P(class 1)
-        if num_classes == 2:
-            Y_one_hot[range(m), 1 - Y] = 1  # Flip index for M/B encoding
-        else:
-            Y_one_hot[range(m), Y] = 1
+        # Output layer has 2 neurons: [P(M), P(B)]
+        # Y=1 (M) → [1,0], Y=0 (B) → [0,1]
+        Y_one_hot = np.zeros((m, 2))
+        Y_one_hot[range(m), 1 - Y] = 1
 
         # Compute output layer gradient
+        # For softmax + cross-entropy: dZ = (1/m) * (A - Y_one_hot)
         output_layer = self.layers[-1]
-        if output_layer.activation == 'softmax':
-            # Softmax + Cross-entropy derivative: dZ = (1/m) * (A - Y_one_hot)
-            dZ = (1 / m) * (output_layer.A - Y_one_hot)
-        else:
-            # For other activations (not typical for classification)
-            dA = (1 / m) * (output_layer.A - Y_one_hot)
-            if output_layer.activation == 'sigmoid':
-                dZ = dA * sigmoid_prime(output_layer.Z)
-            else:
-                dZ = dA
+        dZ = (1 / m) * (output_layer.A - Y_one_hot)
 
         # Backpropagate through all layers (from output to input)
         for i in range(len(self.layers) - 1, -1, -1):
@@ -341,14 +273,10 @@ class NeuralNetwork:
         epsilon = 1e-15
         y_pred_clipped = np.clip(y_pred, epsilon, 1 - epsilon)
 
-        # For binary classification with M=1, B=0 encoding
-        if y_pred.shape[1] == 2:
-            losses = -(y_true * np.log(y_pred_clipped[:, 0]) +
-                       (1 - y_true) * np.log(y_pred_clipped[:, 1]))
-        else:
-            # Multi-class case
-            m = len(y_true)
-            losses = -np.log(y_pred_clipped[range(m), y_true])
+        # Binary classification with M=1, B=0 encoding
+        # y_pred[:, 0] = P(M), y_pred[:, 1] = P(B)
+        losses = -(y_true * np.log(y_pred_clipped[:, 0]) +
+                   (1 - y_true) * np.log(y_pred_clipped[:, 1]))
 
         return np.mean(losses)
 
@@ -357,20 +285,16 @@ class NeuralNetwork:
         Calculate accuracy
 
         Args:
-            y_true: True labels, shape (m,)
-            y_pred: Predicted probabilities, shape (m, num_classes)
+            y_true: True labels, shape (m,) with values 0 or 1
+            y_pred: Predicted probabilities, shape (m, 2)
 
         Returns:
             float: Accuracy between 0.0 and 1.0
         """
-        # Get predicted classes
-        if y_pred.shape[1] == 2:
-            # Binary classification with M=1, B=0 encoding
-            argmax_indices = np.argmax(y_pred, axis=1)
-            predicted_classes = 1 - argmax_indices
-        else:
-            # Multi-class
-            predicted_classes = np.argmax(y_pred, axis=1)
+        # Binary classification with M=1, B=0 encoding
+        # y_pred[:, 0] = P(M), y_pred[:, 1] = P(B)
+        argmax_indices = np.argmax(y_pred, axis=1)
+        predicted_classes = 1 - argmax_indices
 
         # Calculate accuracy
         correct = np.sum(predicted_classes == y_true)
@@ -388,13 +312,10 @@ class NeuralNetwork:
         """
         output = self.apply_feedforward(X)
 
-        if output.shape[1] == 2:
-            # Binary classification
-            argmax_indices = np.argmax(output, axis=1)
-            return 1 - argmax_indices
-        else:
-            # Multi-class
-            return np.argmax(output, axis=1)
+        # Binary classification with M=1, B=0 encoding
+        # output[:, 0] = P(M), output[:, 1] = P(B)
+        argmax_indices = np.argmax(output, axis=1)
+        return 1 - argmax_indices
 
     def save(self, filepath):
         """
