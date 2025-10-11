@@ -189,7 +189,7 @@ class NeuralNetwork:
         # Compute output layer gradient
         # For softmax + cross-entropy: dZ = (1/m) * (A - Y_one_hot)
         output_layer = self.layers[-1]
-        dZ = (1 / m) * (output_layer.A - Y_one_hot)
+        dZ = (output_layer.A - Y_one_hot) / m
 
         # Backpropagate through all layers (from output to input)
         for i in range(len(self.layers) - 1, -1, -1):

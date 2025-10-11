@@ -33,7 +33,7 @@ def load_data(filepath):
         sys.exit(1)
 
 
-def split_dataset(features, labels, ids, train_ratio=0.8, seed=42):
+def split_dataset(features, labels, ids, train_ratio=0.7, seed=42):
     """
     Split dataset into training and validation sets
     

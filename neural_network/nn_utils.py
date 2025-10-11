@@ -46,6 +46,10 @@ def get_data(filename):
         sys.exit(1)
 
 
+# ============================================================================
+# DATA NORMALIZATION
+# ============================================================================
+
 def get_mean_std(X):
     """
     Calculate mean and standard deviation for normalization
@@ -63,6 +67,8 @@ def get_mean_std(X):
 
     # Calculate standard deviation for each feature (column-wise)
     std = np.std(X, axis=0)
+
+    std[std == 0] = 1
 
     return mean, std
 
@@ -85,6 +91,11 @@ def normalize_data(X, mean, std):
     X = (X - mean) / std
 
     return X
+
+
+# ============================================================================
+# DATA BATCHING
+# ============================================================================
 
 def shuffle_and_split_into_mini_batches(X, Y, batch_size):
     """
@@ -118,6 +129,31 @@ def shuffle_and_split_into_mini_batches(X, Y, batch_size):
         X_batch = X_shuffled[start:end]
         Y_batch = Y_shuffled[start:end]
 
+        batches.append([X_batch, Y_batch])
+
+    return batches
+
+def split_into_mini_batches(X, Y, batch_size):
+    """
+    Split data into mini-batches without shuffling
+
+    Args:
+        X: Features matrix, shape (m, n_features)
+        Y: Labels vector, shape (m,) with values 0 or 1
+        batch_size: Size of each mini-batch
+
+    Returns:
+        list: [[[X1], [Y1]], [[X2], [Y2]], ...]
+    """
+    n_samples = X.shape[0]
+    num_batches = (n_samples + batch_size - 1) // batch_size
+    batches = []
+
+    for batch_idx in range(num_batches):
+        start = batch_idx * batch_size
+        end = min(start + batch_size, n_samples)
+        X_batch = X[start:end]
+        Y_batch = Y[start:end]
         batches.append([X_batch, Y_batch])
 
     return batches

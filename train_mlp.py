@@ -200,54 +200,24 @@ def plot_training_curves(train_losses, val_losses, train_accuracies, val_accurac
     plt.savefig('training_metrics.png')
 
 # ============================================================================
-# MAIN FUNCTION
+# TRAINING LOOP
 # ============================================================================
 
-def main():
+def training_loop(config, neural_network, training_X, training_Y, validation_X, validation_Y):
     """
-    Main training function with argument parsing
+    Training loop that handles epochs, batching, and metrics tracking
+
+    Args:
+        config: Configuration dictionary with training parameters
+        neural_network: NeuralNetwork instance
+        training_X: Training features, shape (m, n_features)
+        training_Y: Training labels, shape (m,)
+        validation_X: Validation features, shape (m_val, n_features)
+        validation_Y: Validation labels, shape (m_val,)
+
+    Returns:
+        tuple: (train_losses, val_losses, train_accuracies, val_accuracies)
     """
-    print("=" * 70)
-    print("MULTILAYER PERCEPTRON - TRAINING")
-    print("=" * 70)
-    
-    # Parse command line arguments
-    config = parse_arguments()
-    
-    # Display configuration
-    print("\nTraining Configuration:")
-    print("-" * 70)
-    for i, layer_size in enumerate(config['layers'], 1):
-        print(f"Hidden Layer {i} Size: {layer_size} neurons")
-    print(f"Epochs: {config['epochs']}")
-    print(f"Batch Size: {config['batch_size']}")
-    print(f"Learning Rate: {config['learning_rate']}")
-    print(f"Training File: {config['training_filename']}")
-    print(f"Validation File: {config['validation_filename']}")
-    print("-" * 70)
-
-    # Load data
-    # data = get_training_and_validation_data(config['training_filename'], config['validation_filename'])
-    training_X, training_Y = get_data(config['training_filename'])
-    validation_X, validation_Y = get_data(config['validation_filename'])
-    mean, std = get_mean_std(training_X)
-    training_X = normalize_data(training_X, mean, std)
-    validation_X = normalize_data(validation_X, mean, std)
-    print(training_X)
-    print(training_Y)
-    print(validation_X)
-    print(validation_Y)
-
-    nn = NeuralNetwork(input_size=30)
-    for layer_size in config['layers']:
-        nn.add_layer(neurons=layer_size, layer_type='hidden', activation='sigmoid')
-    nn.add_layer(neurons=2, layer_type='output', activation='softmax')
-    nn.initialize()
-
-    print(f"\nNetwork initialized successfully!")
-    nn.summary()
-
-    # Train the network
     train_losses = []
     train_accuracies = []
     val_losses = []
@@ -277,14 +247,14 @@ def main():
             log_file.write(msg + '\n')
 
             for X, Y in batches:
-                loss, accuracy = nn.train_batch(X, Y, config['learning_rate'])
+                loss, accuracy = neural_network.train_batch(X, Y, config['learning_rate'])
                 total_losses += loss
                 total_accuracies += accuracy
 
             # Calculate epoch metrics
             epoch_training_loss = total_losses / len(batches)
             epoch_training_accuracy = total_accuracies / len(batches)
-            epoch_validation_loss, epoch_validation_accuracy = nn.predict(validation_X, validation_Y)
+            epoch_validation_loss, epoch_validation_accuracy = neural_network.predict(validation_X, validation_Y)
 
             # Store metrics for plotting
             train_losses.append(epoch_training_loss)
@@ -316,6 +286,39 @@ def main():
         msg = "Training completed!"
         print(msg)
         log_file.write(msg + '\n')
+
+    return train_losses, val_losses, train_accuracies, val_accuracies
+
+# ============================================================================
+# MAIN FUNCTION
+# ============================================================================
+
+def main():
+    """
+    Main training function with argument parsing
+    """
+
+    # Parse command line arguments
+    config = parse_arguments()
+
+    # Load data
+    # data = get_training_and_validation_data(config['training_filename'], config['validation_filename'])
+    training_X, training_Y = get_data(config['training_filename'])
+    validation_X, validation_Y = get_data(config['validation_filename'])
+    mean, std = get_mean_std(training_X)
+    training_X = normalize_data(training_X, mean, std)
+    validation_X = normalize_data(validation_X, mean, std)
+
+    nn = NeuralNetwork(input_size=30)
+    for layer_size in config['layers']:
+        nn.add_layer(neurons=layer_size, layer_type='hidden', activation='sigmoid')
+    nn.add_layer(neurons=2, layer_type='output', activation='softmax')
+    nn.initialize()
+
+    
+
+    # Train the network
+    train_losses, val_losses, train_accuracies, val_accuracies = training_loop(config, nn, training_X, training_Y, validation_X, validation_Y)
 
     # Plot training curves
     plot_training_curves(train_losses, val_losses, train_accuracies, val_accuracies, config['epochs'])
