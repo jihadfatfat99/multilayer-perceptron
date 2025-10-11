@@ -90,11 +90,6 @@ class Layer:
 
         return self.A
 
-    def __repr__(self):
-        """String representation of the layer"""
-        return f"Layer(neurons={self.neurons}, type='{self.layer_type}', activation='{self.activation}')"
-
-
 # ============================================================================
 # NEURAL NETWORK CLASS
 # ============================================================================
@@ -374,86 +369,3 @@ class NeuralNetwork:
             layer.biases = np.array(model_data['biases'][i])
 
         print(f"Model loaded from {filepath}")
-
-    def summary(self):
-        """Print network architecture summary"""
-        print("=" * 80)
-        print("NEURAL NETWORK ARCHITECTURE")
-        print("=" * 80)
-        print(f"Input Size: {self.input_size}")
-        print("-" * 80)
-
-        total_params = 0
-        for i, layer in enumerate(self.layers):
-            if layer.weights is not None:
-                layer_params = layer.weights.size + layer.biases.size
-                total_params += layer_params
-                print(f"Layer {i + 1}: {layer.neurons} neurons ({layer.layer_type}, {layer.activation})")
-                print(f"         Parameters: {layer_params} (Weights: {layer.weights.shape}, Biases: {layer.biases.shape})")
-            else:
-                print(f"Layer {i + 1}: {layer.neurons} neurons ({layer.layer_type}, {layer.activation}) [Not initialized]")
-
-        print("-" * 80)
-        print(f"Total Parameters: {total_params}")
-        print("=" * 80)
-
-    def __repr__(self):
-        """String representation of the network"""
-        layer_info = [f"{layer.neurons} neurons" for layer in self.layers]
-        return f"NeuralNetwork(input={self.input_size}, layers=[{', '.join(layer_info)}])"
-
-
-# ============================================================================
-# EXAMPLE USAGE
-# ============================================================================
-
-def example_usage():
-    """
-    Example demonstrating how to use the Layer and NeuralNetwork classes
-    """
-    print("\n" + "=" * 80)
-    print("EXAMPLE: Creating a flexible neural network")
-    print("=" * 80)
-
-    # Example 1: 3-layer network (like original implementation)
-    print("\nExample 1: 3-layer network (30 -> 20 -> 10 -> 2)")
-    nn1 = NeuralNetwork(input_size=30)
-    nn1.add_layer(neurons=20, layer_type='hidden', activation='sigmoid')
-    nn1.add_layer(neurons=10, layer_type='hidden', activation='sigmoid')
-    nn1.add_layer(neurons=2, layer_type='output', activation='softmax')
-    nn1.initialize()
-    nn1.summary()
-
-    # Example 2: 5-layer deep network
-    print("\nExample 2: 5-layer deep network (30 -> 25 -> 20 -> 15 -> 10 -> 2)")
-    nn2 = NeuralNetwork(input_size=30)
-    nn2.add_layer(neurons=25, layer_type='hidden', activation='sigmoid')
-    nn2.add_layer(neurons=20, layer_type='hidden', activation='sigmoid')
-    nn2.add_layer(neurons=15, layer_type='hidden', activation='sigmoid')
-    nn2.add_layer(neurons=10, layer_type='hidden', activation='sigmoid')
-    nn2.add_layer(neurons=2, layer_type='output', activation='softmax')
-    nn2.initialize()
-    nn2.summary()
-
-    # Example 3: Single hidden layer
-    print("\nExample 3: Single hidden layer (30 -> 15 -> 2)")
-    nn3 = NeuralNetwork(input_size=30)
-    nn3.add_layer(neurons=15, layer_type='hidden', activation='sigmoid')
-    nn3.add_layer(neurons=2, layer_type='output', activation='softmax')
-    nn3.initialize()
-    nn3.summary()
-
-    # Test forward propagation with dummy data
-    print("\nTesting forward propagation with dummy data...")
-    X_dummy = np.random.randn(5, 30)  # 5 samples, 30 features
-    output = nn1.apply_feedforward(X_dummy)
-    print(f"Input shape: {X_dummy.shape}")
-    print(f"Output shape: {output.shape}")
-    print(f"Output (probabilities):\n{output}")
-    print(f"Sum of probabilities per sample: {output.sum(axis=1)}")
-
-    print("\n" + "=" * 80)
-
-
-if __name__ == "__main__":
-    example_usage()

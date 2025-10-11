@@ -5,6 +5,122 @@ Helper functions for neural network operations including activation functions
 """
 
 import numpy as np
+import sys
+
+
+# ============================================================================
+# DATA LOADING
+# ============================================================================
+
+def get_data(filename):
+    """
+    Load data from CSV file
+
+    Args:
+        filename: Path to the CSV file
+
+    Returns:
+        tuple: (X, Y) where:
+            X: Features matrix, shape (m, n_features)
+            Y: Labels vector, shape (m,) with values 0 or 1 (B=0, M=1)
+    """
+    try:
+        # Read CSV file
+        data = np.loadtxt(filename, delimiter=',', dtype=str)
+
+        # Extract labels from 2nd column (index 1)
+        # Convert 'M' to 1 and 'B' to 0
+        Y_raw = data[:, 1]
+        Y = np.where(Y_raw == 'M', 1, 0).astype(int)
+
+        # Extract features from 3rd column onwards (index 2:)
+        X = data[:, 2:].astype(float)
+
+        return X, Y
+
+    except FileNotFoundError:
+        print(f"Error: File '{filename}' not found")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error reading file '{filename}': {e}")
+        sys.exit(1)
+
+
+def get_mean_std(X):
+    """
+    Calculate mean and standard deviation for normalization
+
+    Args:
+        X: Features matrix, shape (m, n_features)
+
+    Returns:
+        tuple: (mean, std) where:
+            mean: Mean of each feature, shape (n_features,)
+            std: Standard deviation of each feature, shape (n_features,)
+    """
+    # Calculate mean for each feature (column-wise)
+    mean = np.mean(X, axis=0)
+
+    # Calculate standard deviation for each feature (column-wise)
+    std = np.std(X, axis=0)
+
+    return mean, std
+
+
+def normalize_data(X, mean, std):
+    """
+    Normalize data using mean and standard deviation
+
+    Applies z-score normalization: X_normalized = (X - mean) / std
+
+    Args:
+        X: Features matrix, shape (m, n_features)
+        mean: Mean of each feature, shape (n_features,)
+        std: Standard deviation of each feature, shape (n_features,)
+
+    Returns:
+        X: Normalized features matrix, shape (m, n_features)
+    """
+    # Z-score normalization: (X - mean) / std
+    X = (X - mean) / std
+
+    return X
+
+def shuffle_and_split_into_mini_batches(X, Y, batch_size):
+    """
+    Shuffle data and split into mini-batches
+
+    Args:
+        X: Features matrix, shape (m, n_features)
+        Y: Labels vector, shape (m,) with values 0 or 1
+        batch_size: Size of each mini-batch
+
+    Returns:
+        list: [[[X1], [Y1]], [[X2], [Y2]], ...] where:
+              Xi: features matrix of batch i
+              Yi: labels vector of batch i with values 0 or 1
+    """
+    n_samples = X.shape[0]
+
+    # Shuffle the data (without seed for randomness)
+    indices = np.random.permutation(n_samples)
+    X_shuffled = X[indices]
+    Y_shuffled = Y[indices]
+
+    # Create mini-batches
+    num_batches = (n_samples + batch_size - 1) // batch_size
+    batches = []
+
+    for batch_idx in range(num_batches):
+        start = batch_idx * batch_size
+        end = min(start + batch_size, n_samples)
+
+        X_batch = X_shuffled[start:end]
+        Y_batch = Y_shuffled[start:end]
+
+        batches.append([X_batch, Y_batch])
+
+    return batches
 
 
 # ============================================================================
