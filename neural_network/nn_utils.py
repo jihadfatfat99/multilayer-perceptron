@@ -13,7 +13,13 @@ import numpy as np
 
 def sigmoid(x):
     """
-    Sigmoid activation function
+    Sigmoid activation function with numerical stability
+
+    Uses different formulas for positive and negative values:
+    - For x >= 0: sigmoid(x) = 1 / (1 + e^(-x))
+    - For x < 0:  sigmoid(x) = e^x / (e^x + 1)
+
+    This prevents overflow issues in the exponential function.
 
     Args:
         x: Input matrix/array of any shape
@@ -21,9 +27,19 @@ def sigmoid(x):
     Returns:
         Output matrix with sigmoid applied element-wise
     """
-    # Clip x to prevent overflow in exp(-x)
-    x = np.clip(x, -500, 500)
-    return 1 / (1 + np.exp(-x))
+    # Create output array
+    output = np.zeros_like(x, dtype=np.float64)
+
+    # For positive values: sigmoid(x) = 1 / (1 + e^(-x))
+    positive_mask = x >= 0
+    output[positive_mask] = 1 / (1 + np.exp(-x[positive_mask]))
+
+    # For negative values: sigmoid(x) = e^x / (e^x + 1)
+    negative_mask = x < 0
+    exp_x = np.exp(x[negative_mask])
+    output[negative_mask] = exp_x / (exp_x + 1)
+
+    return output
 
 
 def sigmoid_prime(x):

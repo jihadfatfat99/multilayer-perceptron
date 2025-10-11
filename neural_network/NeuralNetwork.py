@@ -6,8 +6,7 @@ Flexible neural network with support for arbitrary number of layers
 
 import numpy as np
 import json
-import sys
-from nn_utils import sigmoid, sigmoid_prime, softmax
+from .nn_utils import *
 
 
 # ============================================================================
@@ -222,12 +221,7 @@ class NeuralNetwork:
                 # Apply derivative of activation function
                 # dZ_prev = dA_prev * activation_derivative(Z_prev)
                 prev_layer = self.layers[i - 1]
-                if prev_layer.activation == 'sigmoid':
-                    dZ = dA_prev * sigmoid_prime(prev_layer.Z)
-                elif prev_layer.activation == 'linear':
-                    dZ = dA_prev
-                else:
-                    dZ = dA_prev
+                dZ = dA_prev * sigmoid_prime(prev_layer.Z)
 
             # Now update weights and biases using gradient descent
             # W = W - learning_rate * dW
@@ -300,22 +294,26 @@ class NeuralNetwork:
         correct = np.sum(predicted_classes == y_true)
         return correct / len(y_true)
 
-    def predict(self, X):
+    def predict(self, X, Y):
         """
-        Make predictions on input data
+        Make predictions on input data and calculate loss and accuracy
 
         Args:
             X: Input features, shape (batch_size, input_size)
+            Y: True labels, shape (batch_size,) with values 0 or 1
 
         Returns:
-            Predicted class labels, shape (batch_size,)
+            tuple: (loss, accuracy)
+                loss: Cross-entropy loss
+                accuracy: Accuracy score between 0.0 and 1.0
         """
         output = self.apply_feedforward(X)
 
-        # Binary classification with M=1, B=0 encoding
-        # output[:, 0] = P(M), output[:, 1] = P(B)
-        argmax_indices = np.argmax(output, axis=1)
-        return 1 - argmax_indices
+        # Calculate loss and accuracy
+        loss = self.cross_entropy_loss(Y, output)
+        accuracy = self.calculate_accuracy(Y, output)
+
+        return loss, accuracy
 
     def save(self, filepath):
         """

@@ -1,185 +1,7 @@
 import numpy as np
 import sys
-import json
 import matplotlib.pyplot as plt
-
-# ============================================================================
-# NETWORK INITIALIZATION
-# ============================================================================
-
-def xavier_init(n_in, n_out):
-    """
-    Xavier/Glorot initialization for weights and biases
-    
-    Args:
-        n_in: Number of input neurons
-        n_out: Number of output neurons
-        
-    Returns:
-        tuple: (weights, biases)
-            weights: shape (n_in, n_out)
-            biases: shape (n_out,)
-    """
-    # Xavier limit
-    limit = np.sqrt(6.0 / (n_in + n_out))
-    
-    # Initialize weights
-    weights = np.random.uniform(-limit, limit, size=(n_in, n_out))
-    
-    # Initialize biases to zeros
-    biases = np.zeros(n_out)
-    
-    return weights, biases
-
-def initialize_network(input_size=30, hidden1_size=20, hidden2_size=10, output_size=2, seed=42):
-    """
-    Initialize all weights and biases for the complete network
-    
-    Args:
-        input_size: Number of input features (default: 30)
-        hidden1_size: First hidden layer size (default: 20)
-        hidden2_size: Second hidden layer size (default: 10)
-        output_size: Output layer size (default: 2)
-        seed: Random seed for reproducibility (default: 42)
-        
-    Returns:
-        tuple: (W1, b1, W2, b2, W3, b3)
-    """
-    # Set seed for reproducibility
-    np.random.seed(seed)
-    
-    # Initialize each layer
-    W1, b1 = xavier_init(input_size, hidden1_size)      # 30 -> 20
-    W2, b2 = xavier_init(hidden1_size, hidden2_size)    # 20 -> 10
-    W3, b3 = xavier_init(hidden2_size, output_size)     # 10 -> 2
-
-    return W1, b1, W2, b2, W3, b3
-
-# ============================================================================
-# ACTIVATION FUNCTIONS
-# ============================================================================
-
-def sigmoid(x):
-    """
-    Sigmoid activation function
-    
-    Args:
-        x: Input matrix/array of any shape
-        
-    Returns:
-        Output matrix with sigmoid applied element-wise
-    """
-    # Clip x to prevent overflow in exp(-x)
-    x = np.clip(x, -500, 500)
-    
-    return 1 / (1 + np.exp(-x))
-
-def softmax(x):
-    """
-    Softmax activation function
-    
-    Args:
-        x: Input matrix of shape (batch_size, num_classes) or (num_classes,)
-        
-    Returns:
-        Output matrix with softmax applied, same shape as input
-        Each row sums to 1.0 (probability distribution)
-    """
-    # Subtract max for numerical stability
-    x_stable = x - np.max(x, axis=-1, keepdims=True)
-    
-    # Compute exponentials
-    exp_x = np.exp(x_stable)
-    
-    # Compute softmax
-    return exp_x / np.sum(exp_x, axis=-1, keepdims=True)
-
-def sigmoid_prime(x):
-    """
-    Derivative of sigmoid function
-    
-    Args:
-        x: Input matrix/array of any shape
-        
-    Returns:
-        Derivative of sigmoid applied element-wise
-    """
-    sig_x = sigmoid(x)
-    return sig_x * (1 - sig_x)
-
-# ============================================================================
-# LOSS AND METRICS
-# ============================================================================
-
-def cross_entropy(y_true, y_pred):
-    """
-    Binary cross-entropy loss for mini-batch
-    
-    Args:
-        y_true: True labels, shape (m,) with values 0 or 1
-        y_pred: Predicted probabilities, shape (m, 2) from softmax output
-        
-    Returns:
-        float: Average cross-entropy loss across the mini-batch
-    """
-    # Clip predictions to prevent log(0)
-    epsilon = 1e-15
-    y_pred_clipped = np.clip(y_pred, epsilon, 1 - epsilon)
-    
-    # Calculate cross-entropy for each sample
-    # y_pred[:, 0] = P(malignant), y_pred[:, 1] = P(benign)
-    losses = -(y_true * np.log(y_pred_clipped[:, 0]) + 
-               (1 - y_true) * np.log(y_pred_clipped[:, 1]))
-    
-    # Return average loss across mini-batch
-    return np.mean(losses)
-
-def argmax(y_pred, axis=-1):
-    """
-    Return class predictions from softmax probabilities
-    Handles M=1, B=0 encoding with [P(malignant), P(benign)] network output
-    
-    Args:
-        y_pred: Predicted probabilities, shape (m, 2)
-                y_pred[:, 0] = P(malignant)
-                y_pred[:, 1] = P(benign)
-        axis: Axis along which to find argmax (default: -1)
-        
-    Returns:
-        Array of predicted classes: 1 for malignant, 0 for benign
-    """
-    # Get argmax indices (0 or 1)
-    argmax_indices = np.argmax(y_pred, axis=axis)
-    
-    # Convert to your label encoding (M=1, B=0)
-    # argmax=0 (malignant has higher prob) → class=1 (M)
-    # argmax=1 (benign has higher prob) → class=0 (B)
-    predicted_classes = 1 - argmax_indices
-    
-    return predicted_classes
-
-def calculate_accuracy(y_true, y_pred):
-    """
-    Calculate accuracy for binary classification
-    
-    Args:
-        y_true: True labels, shape (m,) with values 0 or 1 (B=0, M=1)
-        y_pred: Predicted probabilities, shape (m, 2) from softmax
-        
-    Returns:
-        float: Accuracy as a value between 0.0 and 1.0
-    """
-    # Convert probabilities to predicted classes using argmax
-    predicted_classes = argmax(y_pred)
-    
-    # Count correct predictions
-    correct_predictions = np.sum(predicted_classes == y_true)
-    
-    # Calculate accuracy
-    total_predictions = len(y_true)
-    accuracy_score = correct_predictions / total_predictions
-
-    return accuracy_score
+from neural_network.nn_utils import sigmoid, sigmoid_prime, softmax
 
 # ============================================================================
 # DATA LOADING AND PREPROCESSING
@@ -314,8 +136,7 @@ def parse_arguments():
     """
     # Default values
     config = {
-        'hidden1_size': 22,
-        'hidden2_size': 16,
+        'layers': [22, 16],  # Default: 2 hidden layers
         'epochs': 300,
         'batch_size': 40,
         'learning_rate': 0.058,
@@ -392,52 +213,19 @@ def parse_arguments():
                 except ValueError:
                     print(f"Error: Layer size must be an integer, got '{args[temp_i]}'")
                     sys.exit(1)
-            
+
             i = temp_i
-            
-            if len(layer_sizes) == 1:
-                print(f"Error: --layer requires exactly 2 values (hidden layer 1 and hidden layer 2 sizes), got only 1")
-                sys.exit(1)
-            
+
             if len(layer_sizes) == 0:
                 print(f"Warning: No valid layer sizes provided, using defaults")
             else:
-                for idx, size in enumerate(layer_sizes[:2]):
-                    if size < 4:
-                        print(f"Error: Hidden layer {idx + 1} size must be at least 4, got {size}")
-                        sys.exit(1)
-                
-                # Get feature count from training file
-                n_features = csv_data['features']
-                
-                for idx, size in enumerate(layer_sizes[:2]):
-                    if size > n_features:
-                        print(f"Error: Hidden layer {idx + 1} size ({size}) cannot exceed number of input features ({n_features})")
-                        sys.exit(1)
-                
-                if len(layer_sizes) >= 2:
-                    if layer_sizes[1] > layer_sizes[0]:
-                        print(f"Error: Hidden layer 2 size ({layer_sizes[1]}) must be less than or equal to hidden layer 1 size ({layer_sizes[0]})")
-                        sys.exit(1)
-                
-                if len(layer_sizes) >= 1:
-                    config['hidden1_size'] = layer_sizes[0]
-                if len(layer_sizes) >= 2:
-                    config['hidden2_size'] = layer_sizes[1]
-                if len(layer_sizes) > 2:
-                    print(f"Warning: More than 2 hidden layers specified, using only first 2")
+                config['layers'] = layer_sizes
         
         elif key == 'epochs':
             try:
                 epochs = int(value)
                 if epochs <= 0:
                     print(f"Error: Epochs must be positive, got {epochs}")
-                    sys.exit(1)
-                if epochs < 10:
-                    print(f"Error: Epochs too small (< 10). Network won't have enough time to learn.")
-                    sys.exit(1)
-                if epochs > 1000:
-                    print(f"Error: Epochs too large (> 1000). This will take very long and likely overfit.")
                     sys.exit(1)
                 config['epochs'] = epochs
             except ValueError:
@@ -450,25 +238,7 @@ def parse_arguments():
                 if batch_size <= 0:
                     print(f"Error: Batch size must be positive, got {batch_size}")
                     sys.exit(1)
-                
-                if batch_size < 4:
-                    print(f"Error: Batch size too small (< 4). Use at least 4 samples per batch for stable gradients.")
-                    sys.exit(1)
-                
-                # Get training data size
-                n_train_samples = csv_data['lines']
-                
-                if batch_size > n_train_samples:
-                    print(f"Error: Batch size ({batch_size}) cannot be larger than training data size ({n_train_samples})")
-                    sys.exit(1)
-                
-                if batch_size > n_train_samples // 2:
-                    print(f"Error: Batch size ({batch_size}) is too large (> {n_train_samples // 2}).")
-                    print(f"For effective mini-batch training, use batch size between 4 and {n_train_samples // 2}")
-                    sys.exit(1)
-                
                 config['batch_size'] = batch_size
-            
             except ValueError:
                 print(f"Error: Batch size must be an integer, got '{value}'")
                 sys.exit(1)
@@ -478,12 +248,6 @@ def parse_arguments():
                 lr = float(value)
                 if lr <= 0:
                     print(f"Error: Learning rate must be positive, got {lr}")
-                    sys.exit(1)
-                if lr < 0.0001:
-                    print(f"Error: Learning rate too small (< 0.0001). Network will learn too slowly or not at all.")
-                    sys.exit(1)
-                if lr > 0.5:
-                    print(f"Error: Learning rate too large (> 0.5). Network will be unstable and diverge.")
                     sys.exit(1)
                 config['learning_rate'] = lr
             except ValueError:
@@ -786,59 +550,103 @@ def main():
     # Display configuration
     print("\nTraining Configuration:")
     print("-" * 70)
-    print(f"Hidden Layer 1 Size: {config['hidden1_size']} neurons")
-    print(f"Hidden Layer 2 Size: {config['hidden2_size']} neurons")
+    for i, layer_size in enumerate(config['layers'], 1):
+        print(f"Hidden Layer {i} Size: {layer_size} neurons")
     print(f"Epochs: {config['epochs']}")
     print(f"Batch Size: {config['batch_size']}")
     print(f"Learning Rate: {config['learning_rate']}")
     print("-" * 70)
-    
+
     # Load data
     data = get_training_and_validation_data('data_training.csv', 'data_validation.csv')
 
-    # Initialize network with parsed configuration
-    W1, b1, W2, b2, W3, b3 = initialize_network(
-        input_size=30,
-        hidden1_size=config['hidden1_size'],
-        hidden2_size=config['hidden2_size'],
-        output_size=2
-    )
+    # Initialize network using NeuralNetwork class
+    from neural_network.NeuralNetwork import NeuralNetwork
+
+    nn = NeuralNetwork(input_size=30)
+    for layer_size in config['layers']:
+        nn.add_layer(neurons=layer_size, layer_type='hidden', activation='sigmoid')
+    nn.add_layer(neurons=2, layer_type='output', activation='softmax')
+    nn.initialize()
 
     print(f"\nNetwork initialized successfully!")
-    print(f"Total parameters: {W1.size + b1.size + W2.size + b2.size + W3.size + b3.size}")
+    nn.summary()
 
     # Train the network
-    W1, b1, W2, b2, W3, b3 = training_loop(
-        W1, b1, W2, b2, W3, b3,
-        data[0],  # training_data
-        data[1],  # validation_data
-        config['epochs'],
-        config['batch_size'],
-        config['learning_rate']
-    )
+    train_losses = []
+    train_accuracies = []
+    val_losses = []
+    val_accuracies = []
 
-    # Save trained model to JSON
-    model_data = {
-        'architecture': {
-            'input_size': 30,
-            'hidden1_size': config['hidden1_size'],
-            'hidden2_size': config['hidden2_size'],
-            'output_size': 2
-        },
-        'weights': {
-            'W1': W1.tolist(),
-            'W2': W2.tolist(),
-            'W3': W3.tolist()
-        },
-        'biases': {
-            'b1': b1.tolist(),
-            'b2': b2.tolist(),
-            'b3': b3.tolist()
-        }
-    }
+    with open('logs.txt', 'w') as log_file:
+        msg = "\nStarting training..."
+        print(msg)
+        log_file.write(msg + '\n')
 
-    with open('model.json', 'w') as f:
-        json.dump(model_data, f, indent=2)
+        msg = "=" * 70
+        print(msg)
+        log_file.write(msg + '\n')
+
+        for epoch in range(config['epochs']):
+            # Training phase
+            batches = shuffle_and_split_into_mini_batches(data[0], config['batch_size'])
+            total_losses = 0
+            total_accuracies = 0
+
+            msg = f"\nEpoch {epoch + 1}/{config['epochs']}"
+            print(msg)
+            log_file.write(msg + '\n')
+
+            msg = f"  Processing {len(batches)} mini-batches..."
+            print(msg)
+            log_file.write(msg + '\n')
+
+            for X, Y in batches:
+                loss, accuracy = nn.train_batch(X, Y, config['learning_rate'])
+                total_losses += loss
+                total_accuracies += accuracy
+
+            # Calculate epoch metrics
+            epoch_training_loss = total_losses / len(batches)
+            epoch_training_accuracy = total_accuracies / len(batches)
+            epoch_validation_loss, epoch_validation_accuracy = nn.predict(data[1][0], data[1][1])
+
+            # Store metrics for plotting
+            train_losses.append(epoch_training_loss)
+            train_accuracies.append(epoch_training_accuracy)
+            val_losses.append(epoch_validation_loss)
+            val_accuracies.append(epoch_validation_accuracy)
+
+            # Print epoch summary
+            msg = f"  Training Loss:       {epoch_training_loss:.6f}"
+            print(msg)
+            log_file.write(msg + '\n')
+
+            msg = f"  Training Accuracy:   {epoch_training_accuracy:.4f} ({epoch_training_accuracy * 100:.2f}%)"
+            print(msg)
+            log_file.write(msg + '\n')
+
+            msg = f"  Validation Loss:     {epoch_validation_loss:.6f}"
+            print(msg)
+            log_file.write(msg + '\n')
+
+            msg = f"  Validation Accuracy: {epoch_validation_accuracy:.4f} ({epoch_validation_accuracy * 100:.2f}%)"
+            print(msg)
+            log_file.write(msg + '\n')
+
+        msg = "\n" + "=" * 70
+        print(msg)
+        log_file.write(msg + '\n')
+
+        msg = "Training completed!"
+        print(msg)
+        log_file.write(msg + '\n')
+
+    # Plot training curves
+    plot_training_curves(train_losses, val_losses, train_accuracies, val_accuracies, config['epochs'])
+
+    # Save trained model
+    nn.save('model.json')
 
     print("\n" + "=" * 70)
     print("Training finished! Model saved to model.json")
