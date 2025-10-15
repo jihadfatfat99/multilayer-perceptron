@@ -47,6 +47,7 @@ def main():
     parser.add_argument('--patience', type=int, default=15, help='Early stopping patience')
     parser.add_argument('--output', type=Path, default=Path('model.json'),
                         help='Output JSON file')
+    parser.add_argument('--model_name', type=str, required=True, help='model json file name')
 
     args = parser.parse_args()
 
@@ -265,6 +266,19 @@ def main():
 
     with open(args.output, 'w') as f:
         json.dump(model_data, f, indent=2)
+    
+    # Save training history for later comparison
+    history_data = {
+        "model_name": args.model_name,
+        "epochs": len(train_losses),
+        "train_loss": train_losses,
+        "val_loss": val_losses,
+        "train_acc": train_accs,
+        "val_acc": val_accs
+    }
+
+    with open(f"history_{args.model_name}.json", "w") as f:
+        json.dump(history_data, f, indent=4)
 
     print("Model saved successfully!")
 
