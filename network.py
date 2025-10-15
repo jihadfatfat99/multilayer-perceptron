@@ -31,7 +31,7 @@ class NeuralNetwork:
     Multi-layer perceptron with ReLU hidden layers and softmax output.
     """
 
-    def __init__(self, architecture: List[int], random_seed: int = 42):
+    def __init__(self, architecture: List[int], random_seed: int = 42, optimizer: str = "gd"):
         """
         Initialize network with specified layer sizes.
 
@@ -42,9 +42,15 @@ class NeuralNetwork:
         self.architecture = architecture
         self.num_layers = len(architecture) - 1
         self.rng = np.random.default_rng(random_seed)
+        self.optimizer = optimizer
+        self.t = 0
 
         self.weights = []
         self.biases = []
+        self.m_weights = []
+        self.v_weights = []
+        self.m_biases = []
+        self.v_biases = []
 
         self._initialize_parameters()
 
@@ -70,6 +76,10 @@ class NeuralNetwork:
 
             self.weights.append(weight_matrix)
             self.biases.append(bias_vector)
+            self.m_weights.append(np.zeros_like(weight_matrix))
+            self.v_weights.append(np.zeros_like(weight_matrix))
+            self.m_biases.append(np.zeros_like(bias_vector))
+            self.v_biases.append(np.zeros_like(bias_vector))
 
     @staticmethod
     def relu(z: np.ndarray) -> np.ndarray:
@@ -186,8 +196,31 @@ class NeuralNetwork:
             bias_gradient = np.sum(gradient, axis=0)
 
             # Update parameters
-            self.weights[layer_idx] -= learning_rate * weight_gradient
-            self.biases[layer_idx] -= learning_rate * bias_gradient
+            if self.optimizer == "gd":
+                self.weights[layer_idx] -= learning_rate * weight_gradient
+                self.biases[layer_idx] -= learning_rate * bias_gradient
+            else:
+                # ---------- ADAM OPTIMIZER ----------
+                self.t += 1
+                beta1, beta2, eps = 0.9, 0.999, 1e-8
+
+                # Update biased first moment estimates
+                self.m_weights[layer_idx] = beta1 * self.m_weights[layer_idx] + (1 - beta1) * weight_gradient
+                self.m_biases[layer_idx]  = beta1 * self.m_biases[layer_idx]  + (1 - beta1) * bias_gradient
+
+                # Update biased second raw moment estimates
+                self.v_weights[layer_idx] = beta2 * self.v_weights[layer_idx] + (1 - beta2) * (weight_gradient ** 2)
+                self.v_biases[layer_idx]  = beta2 * self.v_biases[layer_idx]  + (1 - beta2) * (bias_gradient ** 2)
+
+                # Compute bias-corrected estimates
+                m_w_hat = self.m_weights[layer_idx] / (1 - beta1 ** self.t)
+                v_w_hat = self.v_weights[layer_idx] / (1 - beta2 ** self.t)
+                m_b_hat = self.m_biases[layer_idx] / (1 - beta1 ** self.t)
+                v_b_hat = self.v_biases[layer_idx] / (1 - beta2 ** self.t)
+
+                # Update parameters
+                self.weights[layer_idx] -= learning_rate * m_w_hat / (np.sqrt(v_w_hat) + eps)
+                self.biases[layer_idx]  -= learning_rate * m_b_hat / (np.sqrt(v_b_hat) + eps)
 
             # Propagate gradient to previous layer
             if layer_idx > 0:

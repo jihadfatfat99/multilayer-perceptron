@@ -48,6 +48,8 @@ def main():
     parser.add_argument('--output', type=Path, default=Path('model.json'),
                         help='Output JSON file')
     parser.add_argument('--model_name', type=str, required=True, help='model json file name')
+    parser.add_argument('--optimizer', type=str, choices=["gd", "adam"], default="gd",
+                        help='optimizer type (gradient descent or adam)')
 
     args = parser.parse_args()
 
@@ -134,7 +136,8 @@ def main():
     print("\n" + "=" * 70)
     print("INITIALIZING NETWORK")
     print("=" * 70)
-    network = NeuralNetwork(architecture=full_arch, random_seed=42)
+    network = NeuralNetwork(architecture=full_arch, random_seed=42,
+                            optimizer= args.optimizer)
     print("Network initialized with Xavier/Glorot initialization")
 
     # Training
