@@ -11,19 +11,34 @@ def load_history(path):
 
 
 def plot_histories(files):
-    plt.figure(figsize=(10, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
+    # ----- Plot Loss Curves -----
     for file in files:
         data = load_history(file)
         label = data.get("model_name", os.path.basename(file))
-        plt.plot(data["train_loss"], label=f"{label} - train")
-        plt.plot(data["val_loss"], linestyle="--", label=f"{label} - val")
+        axes[0].plot(data["train_loss"], label=f"{label} - train")
+        axes[0].plot(data["val_loss"], linestyle="--", label=f"{label} - val")
 
-    plt.title("Learning Curves Comparison")
-    plt.xlabel("Epochs")
-    plt.ylabel("Loss")
-    plt.legend()
-    plt.grid(True)
+    axes[0].set_title("Training and Validation Loss")
+    axes[0].set_xlabel("Epochs")
+    axes[0].set_ylabel("Loss")
+    axes[0].legend()
+    axes[0].grid(True)
+
+    # ----- Plot Accuracy Curves -----
+    for file in files:
+        data = load_history(file)
+        label = data.get("model_name", os.path.basename(file))
+        axes[1].plot(data["train_acc"], label=f"{label} - train")
+        axes[1].plot(data["val_acc"], linestyle="--", label=f"{label} - val")
+
+    axes[1].set_title("Training and Validation Accuracy")
+    axes[1].set_xlabel("Epochs")
+    axes[1].set_ylabel("Accuracy")
+    axes[1].legend()
+    axes[1].grid(True)
+
     plt.tight_layout()
     plt.show()
 
